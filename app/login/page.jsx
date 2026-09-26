@@ -4,13 +4,16 @@ import Brand from '@/components/Brand';
 import LoginForm from '@/components/LoginForm';
 import { createClient } from '@/lib/supabase/server';
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }) {
+  const params = await searchParams;
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
 
   if (data?.claims?.sub) {
     redirect('/dashboard');
   }
+
+  const nextPath = params?.next?.startsWith('/') ? params.next : '/dashboard';
 
   return (
     <main className="login-page">
@@ -33,7 +36,11 @@ export default async function LoginPage() {
           <span className="eyebrow">WELCOME BACK</span>
           <h2>Ready to train?</h2>
           <p className="muted">Continue exactly where you left off.</p>
-          <LoginForm />
+          <LoginForm
+            confirmed={params?.confirmed === '1'}
+            authError={params?.auth_error === '1'}
+            nextPath={nextPath}
+          />
         </div>
       </section>
     </main>
