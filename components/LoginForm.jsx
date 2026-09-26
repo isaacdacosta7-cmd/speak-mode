@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export default function LoginForm() {
+export default function LoginForm({ confirmed = false, authError = false, nextPath = '/dashboard' }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -27,9 +26,7 @@ export default function LoginForm() {
         return;
       }
 
-      const next = searchParams.get('next');
-      const safeNext = next && next.startsWith('/') ? next : '/dashboard';
-
+      const safeNext = nextPath?.startsWith('/') ? nextPath : '/dashboard';
       router.replace(safeNext);
       router.refresh();
     } catch {
@@ -41,11 +38,8 @@ export default function LoginForm() {
 
   return (
     <form className="login-form" onSubmit={handleSubmit}>
-      {searchParams.get('confirmed') === '1' ? (
-        <p className="form-success">Email confirmed. You can sign in now.</p>
-      ) : null}
-
-      {searchParams.get('auth_error') === '1' ? (
+      {confirmed ? <p className="form-success">Email confirmed. You can sign in now.</p> : null}
+      {authError ? (
         <p className="form-message">The confirmation link could not be completed. Try signing in again.</p>
       ) : null}
 
