@@ -1,8 +1,17 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import Brand from '@/components/Brand';
 import LoginForm from '@/components/LoginForm';
+import { createClient } from '@/lib/supabase/server';
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+
+  if (data?.claims?.sub) {
+    redirect('/dashboard');
+  }
+
   return (
     <main className="login-page">
       <section className="login-visual">
