@@ -15,7 +15,7 @@ export default function HomePage() {
         </p>
         <div className="welcome-actions">
           <Link className="button button-primary" href="/login">Enter Speak Mode</Link>
-          <Link className="button button-ghost" href="/dashboard">Preview dashboard</Link>
+          <Link className="button button-ghost" href="/signup">Create account</Link>
         </div>
       </section>
     </main>
