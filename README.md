@@ -32,3 +32,11 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ## Database
 
 `supabase/schema.sql` contains the initial RLS-protected schema for student profiles and training progress.
+
+
+## Deployment
+
+- Hosting: Vercel
+- Production branch: `main`
+- Database/Auth: Supabase
+- Supabase region: `us-west-2`
