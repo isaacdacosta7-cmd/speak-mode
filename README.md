@@ -40,3 +40,5 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 - Production branch: `main`
 - Database/Auth: Supabase
 - Supabase region: `us-west-2`
+
+<!-- deploy-sync: 2026-09-26 -->
