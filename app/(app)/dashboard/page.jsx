@@ -1,51 +1,130 @@
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
 
-export default function DashboardPage() {
+function titleCaseMode(mode) {
+  return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
+}
+
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+
+  const [{ data: profile }, { data: progressRows }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name, placement_score, placement_mode, daily_goal_minutes')
+      .eq('id', claims.sub)
+      .maybeSingle(),
+    supabase
+      .from('training_progress')
+      .select('session_key, completion_percent, speaking_seconds, xp')
+      .eq('user_id', claims.sub),
+  ]);
+
+  const firstName = profile?.full_name?.trim()?.split(/\s+/)[0] || claims.email?.split('@')[0] || 'Student';
+  const progress = progressRows || [];
+  const xp = progress.reduce((total, row) => total + (row.xp || 0), 0);
+  const speakingSeconds = progress.reduce((total, row) => total + (row.speaking_seconds || 0), 0);
+  const speakingMinutes = Math.floor(speakingSeconds / 60);
+  const completedSessions = progress.filter((row) => row.completion_percent >= 100).length;
+  const firstSession = progress.find((row) => row.session_key === 'start-01');
+  const sessionProgress = firstSession?.completion_percent || 0;
+  const mode = titleCaseMode(profile?.placement_mode);
+
   return (
     <div className="dashboard-stack">
       <section className="hero-training">
         <div>
-          <span className="eyebrow">GOOD AFTERNOON, ISAAC</span>
+          <span className="eyebrow">WELCOME, {firstName.toUpperCase()}</span>
           <h1>Ready for today’s English?</h1>
-          <p>Your next session is built to make five core phrases feel automatic.</p>
+          <p>
+            {profile?.placement_score == null
+              ? 'Your account is active. Your placement result will determine the training path that appears here.'
+              : `You are in ${mode}. Your training will adapt to the level assigned by your placement result.`}
+          </p>
         </div>
-        <div className="streak-pill"><span>🔥</span><strong>6</strong><small>day streak</small></div>
+
+        <div className="streak-pill">
+          <span>⚡</span>
+          <strong>{completedSessions}</strong>
+          <small>sessions done</small>
+        </div>
       </section>
 
       <section className="continue-card">
         <div className="continue-top">
           <div>
-            <span className="tiny-label">CONTINUE TRAINING</span>
-            <h2>Session 01 · Introduce Yourself</h2>
-            <p>Listen → Repeat → Build → Answer → Speak</p>
+            <span className="tiny-label">{profile?.placement_score == null ? 'NEXT STEP' : 'CONTINUE TRAINING'}</span>
+            <h2>{profile?.placement_score == null ? 'Connect your placement result' : 'Session 01 · Introduce Yourself'}</h2>
+            <p>
+              {profile?.placement_score == null
+                ? 'Once your test score is saved, Speak Mode will unlock the correct learning path.'
+                : 'Listen → Repeat → Build → Answer → Speak'}
+            </p>
           </div>
-          <div className="progress-orb"><strong>18%</strong><span>done</span></div>
+
+          <div className="progress-orb">
+            <strong>{sessionProgress}%</strong>
+            <span>done</span>
+          </div>
         </div>
-        <div className="progress-track"><span style={{ width: '18%' }} /></div>
+
+        <div className="progress-track"><span style={{ width: `${sessionProgress}%` }} /></div>
+
         <div className="session-meta">
-          <span>🎧 5 min listening</span><span>🎙 6 min speaking</span><span>⚡ 12 quick answers</span>
+          <span>🎧 Listening</span>
+          <span>🎙 Speaking</span>
+          <span>⚡ Quick answers</span>
         </div>
-        <Link href="/train" className="button button-primary">Start session →</Link>
+
+        <Link href="/train" className="button button-primary">
+          {profile?.placement_score == null ? 'Preview training →' : 'Start session →'}
+        </Link>
       </section>
 
       <section className="dashboard-grid">
-        <article className="metric-card"><span className="metric-icon">⚡</span><strong>240</strong><small>Speaking XP</small><em>+40 this week</em></article>
-        <article className="metric-card"><span className="metric-icon">✦</span><strong>14</strong><small>Power Phrases</small><em>5 ready to review</em></article>
-        <article className="metric-card"><span className="metric-icon">🎙</span><strong>28m</strong><small>Speaking Time</small><em>Goal: 60m this week</em></article>
+        <article className="metric-card">
+          <span className="metric-icon">⚡</span>
+          <strong>{xp}</strong>
+          <small>Speaking XP</small>
+          <em>Earn XP as you complete training</em>
+        </article>
+
+        <article className="metric-card">
+          <span className="metric-icon">✓</span>
+          <strong>{completedSessions}</strong>
+          <small>Sessions Completed</small>
+          <em>Your completed training sessions</em>
+        </article>
+
+        <article className="metric-card">
+          <span className="metric-icon">🎙</span>
+          <strong>{speakingMinutes}m</strong>
+          <small>Speaking Time</small>
+          <em>Daily goal: {profile?.daily_goal_minutes || 20} min</em>
+        </article>
       </section>
 
       <section className="split-grid">
         <article className="panel-card">
-          <span className="tiny-label">TODAY'S MISSION</span>
-          <h3>Talk about yourself for 60 seconds.</h3>
-          <p>Use at least three phrases from your current training set.</p>
-          <Link href="/speak" className="text-link">Open Speak Lab →</Link>
+          <span className="tiny-label">CURRENT MODE</span>
+          <h3>{mode}</h3>
+          <p>
+            {profile?.placement_score == null
+              ? 'Your placement score is waiting to be connected to this account.'
+              : `Placement score: ${profile.placement_score}/100.`}
+          </p>
+          <Link href="/profile" className="text-link">View profile →</Link>
         </article>
+
         <article className="panel-card accent-panel">
-          <span className="tiny-label">NEXT LIVE UNLOCK</span>
-          <h3>Complete 4 more sessions.</h3>
-          <p>Your first coach conversation unlocks after Foundation Block 1.</p>
-          <div className="mini-progress"><span style={{ width: '42%' }} /></div>
+          <span className="tiny-label">LIVE COACH</span>
+          <h3>Your human conversation layer.</h3>
+          <p>Coach sessions will unlock according to your training plan and progress.</p>
+          <Link href="/live" className="text-link">View Live area →</Link>
         </article>
       </section>
     </div>
