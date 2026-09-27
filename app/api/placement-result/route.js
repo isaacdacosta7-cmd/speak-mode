@@ -45,42 +45,28 @@ export async function POST(request) {
     }
   }
 
-  const totalScore =
-    scores.listening_score +
-    scores.reaction_score +
-    scores.real_english_score +
-    scores.writing_score;
+  const { data, error } = await supabase.rpc('submit_placement_result', {
+    p_listening_score: scores.listening_score,
+    p_reaction_score: scores.reaction_score,
+    p_real_english_score: scores.real_english_score,
+    p_writing_score: scores.writing_score,
+  });
 
-  const { data: attempt, error: attemptError } = await supabase
-    .from('placement_attempts')
-    .insert({
-      user_id: claims.sub,
-      ...scores,
-    })
-    .select('id, total_score, placement_mode, completed_at')
-    .single();
-
-  if (attemptError) {
-    return NextResponse.json({ error: 'Could not save placement attempt' }, { status: 500 });
+  if (error || !data?.length) {
+    return NextResponse.json(
+      { error: error?.message || 'Could not save placement result' },
+      { status: 500 }
+    );
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .update({ placement_score: totalScore })
-    .eq('id', claims.sub)
-    .select('placement_score, placement_mode, placement_completed_at')
-    .single();
-
-  if (profileError) {
-    return NextResponse.json({ error: 'Could not update student profile' }, { status: 500 });
-  }
+  const result = data[0];
 
   return NextResponse.json({
     success: true,
-    attempt_id: attempt.id,
-    total_score: profile.placement_score,
-    placement_mode: profile.placement_mode,
-    placement_completed_at: profile.placement_completed_at,
+    attempt_id: result.attempt_id,
+    total_score: result.total_score,
+    placement_mode: result.placement_mode,
+    placement_completed_at: result.placement_completed_at,
     breakdown: scores,
   });
 }
