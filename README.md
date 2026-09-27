@@ -42,3 +42,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 - Supabase region: `us-west-2`
 
 <!-- deploy-sync: 2026-09-26 -->
+
+
+## Private beta
+
+This release candidate includes Daily Speak, real streak tracking, spaced Power Phrase review, beta feedback, and admin tester analytics. Voice Conversation remains in standby until the production speech-to-text provider is connected.
