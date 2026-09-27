@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import Brand from '@/components/Brand';
 import LogoutButton from '@/components/LogoutButton';
+import BetaFeedback from '@/components/BetaFeedback';
 
 const navItems = [
   ['⌂', 'Home', '/dashboard'],
+  ['☀', 'Daily', '/daily'],
   ['▶', 'Train', '/train'],
-  ['●', 'Speak', '/speak'],
   ['✦', 'Phrases', '/phrases'],
   ['◉', 'Live', '/live'],
   ['◎', 'Profile', '/profile'],
@@ -29,9 +30,16 @@ function readableMode(mode) {
 export default function AppShell({ children, user }) {
   const mode = readableMode(user?.placementMode);
   const displayName = user?.fullName || user?.email?.split('@')[0] || 'Student';
-  const visibleNav = ['coach', 'admin'].includes(user?.role)
-    ? [...navItems, ['◇', 'Coach', '/coach/live']]
-    : navItems;
+
+  let visibleNav = [...navItems];
+
+  if (['coach', 'admin'].includes(user?.role)) {
+    visibleNav.push(['◇', 'Coach', '/coach/live']);
+  }
+
+  if (user?.role === 'admin') {
+    visibleNav.push(['▦', 'Admin', '/admin']);
+  }
 
   return (
     <div className="app-shell">
@@ -61,7 +69,7 @@ export default function AppShell({ children, user }) {
         <header className="topbar">
           <div>
             <span className="topbar-kicker">SPEAK MODE</span>
-            <span className="topbar-status"><i /> Training active</span>
+            <span className="topbar-status"><i /> Beta active</span>
           </div>
 
           <Link href="/profile" className="profile-chip">
@@ -83,6 +91,8 @@ export default function AppShell({ children, user }) {
           </Link>
         ))}
       </nav>
+
+      <BetaFeedback />
     </div>
   );
 }
