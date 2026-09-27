@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './LiveBooking.module.css';
 
-export default function LiveBooking({ plan, used, sessions }) {
+export default function LiveBooking({ plan, used, sessions, subscriptionActive }) {
   const router = useRouter();
   const [preferredStart, setPreferredStart] = useState('');
   const [topic, setTopic] = useState('');
@@ -56,7 +56,7 @@ export default function LiveBooking({ plan, used, sessions }) {
     }
   }
 
-  const canBook = plan.live_sessions_per_month > 0 && remaining > 0;
+  const canBook = subscriptionActive && plan.live_sessions_per_month > 0 && remaining > 0;
 
   return (
     <div className={styles.grid}>
@@ -118,9 +118,11 @@ export default function LiveBooking({ plan, used, sessions }) {
           </form>
         ) : (
           <div className={styles.closed}>
-            <strong>{plan.live_sessions_per_month === 0 ? 'Upgrade required' : 'Monthly limit reached'}</strong>
+            <strong>{!subscriptionActive && plan.live_sessions_per_month > 0 ? 'Subscription inactive' : plan.live_sessions_per_month === 0 ? 'Upgrade required' : 'Monthly limit reached'}</strong>
             <p>
-              {plan.live_sessions_per_month === 0
+              {!subscriptionActive && plan.live_sessions_per_month > 0
+                ? 'Reactivate the paid plan to request another human conversation session.'
+                : plan.live_sessions_per_month === 0
                 ? 'Plus and Pro include a controlled number of human conversation sessions each month.'
                 : 'Your quota refreshes with the next monthly cycle.'}
             </p>
