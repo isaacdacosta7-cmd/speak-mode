@@ -1,106 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './TrainingSession.module.css';
-
-const modeContent = {
-  START_MODE: {
-    label: 'START MODE',
-    title: 'Introduce Yourself',
-    subtitle: 'Build your first automatic conversation blocks.',
-    phrase: "Hi, I'm {{name}}. I'm from Venezuela. I work in marketing. What about you?",
-    chunks: ["Hi, I'm {{name}}.", "I'm from Venezuela.", "I work in marketing.", 'What about you?'],
-    buildPrompt: 'Complete this with your own information:',
-    buildStem: "I'm from",
-    quickPrompt: 'Someone asks: “What do you do?” Give a short, natural answer.',
-    rolePrompt: 'You meet someone at an international event. They say: “Hi! Nice to meet you. Where are you from?”',
-    roleOptions: [
-      'I’m from Venezuela. What about you?',
-      'Venezuela is my country from.',
-      'I am having Venezuela.',
-    ],
-    best: 0,
-    speakPrompt: 'Introduce yourself for about 30 seconds. Say your name, where you are from, what you do, and finish with “What about you?”',
-    power: ['Hi, I’m…', 'I’m from…', 'I work in…', 'What about you?'],
-  },
-  RESPONSE_MODE: {
-    label: 'RESPONSE MODE',
-    title: 'Answer Without Freezing',
-    subtitle: 'Turn familiar English into quicker responses.',
-    phrase: "Actually, I work in marketing. I usually help small businesses. What about you?",
-    chunks: ['Actually, I work in marketing.', 'I usually help small businesses.', 'What about you?'],
-    buildPrompt: 'Complete this with something true about your routine:',
-    buildStem: 'Usually, I',
-    quickPrompt: 'Someone asks: “What do you usually do on weekends?” Answer in one or two sentences.',
-    rolePrompt: 'A new contact asks: “So, what have you been working on lately?”',
-    roleOptions: [
-      'Actually, I’ve been working on a new project. What about you?',
-      'I working lately project.',
-      'Yes, lately is good.',
-    ],
-    best: 0,
-    speakPrompt: 'Talk for about 30 seconds about what you do during a normal week. Use “usually” and ask one question back.',
-    power: ['Actually…', 'Usually, I…', 'Let me think…', 'What about you?'],
-  },
-  CONVERSATION_MODE: {
-    label: 'CONVERSATION MODE',
-    title: 'Keep It Going',
-    subtitle: 'React, add detail and ask the next question.',
-    phrase: "Really? That sounds interesting. How did you get into that?",
-    chunks: ['Really?', 'That sounds interesting.', 'How did you get into that?'],
-    buildPrompt: 'Add a natural follow-up question after this reaction:',
-    buildStem: 'That sounds interesting.',
-    quickPrompt: 'A friend says: “I just got back from Mexico.” Respond and ask a follow-up question.',
-    rolePrompt: 'Someone tells you: “I started my own business last year.”',
-    roleOptions: [
-      'Really? That’s great. What made you decide to start it?',
-      'Business last year is beginning.',
-      'Okay. End of conversation.',
-    ],
-    best: 0,
-    speakPrompt: 'Talk for about 40 seconds about a recent experience, then imagine the listener reacts. Add one follow-up question to keep the conversation moving.',
-    power: ['Really?', 'How was it?', 'What happened next?', 'That reminds me of…'],
-  },
-  FLUENCY_MODE: {
-    label: 'FLUENCY MODE',
-    title: 'Sound More Natural',
-    subtitle: 'Use rhythm, reactions and flexible conversational chunks.',
-    phrase: "Now that you mention it, I’ve actually been thinking about that too.",
-    chunks: ['Now that you mention it…', 'I’ve actually been thinking about that too.', 'That makes sense.'],
-    buildPrompt: 'Use this opener to add your own idea:',
-    buildStem: 'Now that you mention it,',
-    quickPrompt: 'Someone says: “Working from home is more productive for everyone.” React naturally and add your view.',
-    rolePrompt: 'A colleague says: “I’m thinking about changing careers completely.”',
-    roleOptions: [
-      'That’s a big move. What’s making you think about the change?',
-      'Career completely change is maybe.',
-      'You must change it immediately.',
-    ],
-    best: 0,
-    speakPrompt: 'Speak for about 45 seconds about a decision you have been considering. Use at least two natural reaction or transition phrases.',
-    power: ['Now that you mention it…', 'That makes sense.', 'Pretty much.', 'By the way…'],
-  },
-  NATIVE_FLOW: {
-    label: 'NATIVE FLOW',
-    title: 'Precision & Personality',
-    subtitle: 'Train nuance, spontaneous reactions and conversational control.',
-    phrase: "I get where you’re coming from. Off the top of my head, I’d probably approach it differently.",
-    chunks: ['I get where you’re coming from.', 'Off the top of my head…', 'I’d probably approach it differently.'],
-    buildPrompt: 'Use this phrase to introduce a spontaneous opinion:',
-    buildStem: 'Off the top of my head,',
-    quickPrompt: 'Someone says: “AI will replace most creative jobs within five years.” Give a nuanced response.',
-    rolePrompt: 'During a meeting someone proposes a plan you partly agree with.',
-    roleOptions: [
-      'I get where you’re coming from. I’d tweak a couple of things before moving forward.',
-      'I am disagree with all your plan.',
-      'Your idea is totally impossible.',
-    ],
-    best: 0,
-    speakPrompt: 'Speak for about 60 seconds about an idea you have mixed feelings about. Use nuance, one spontaneous reaction and one follow-up question.',
-    power: ['I get where you’re coming from.', 'Off the top of my head…', 'That caught me off guard.', 'I’d put it this way…'],
-  },
-};
 
 function speak(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -119,12 +21,19 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-export default function TrainingSession({ fullName, mode, score }) {
+export default function TrainingSession({
+  fullName,
+  mode,
+  score,
+  session,
+  sessionNumber,
+  totalSessions,
+  nextSessionKey = null,
+}) {
   const router = useRouter();
-  const content = modeContent[mode] || modeContent.START_MODE;
   const firstName = fullName.trim().split(/\s+/)[0] || 'Student';
-  const phrase = content.phrase.replaceAll('{{name}}', firstName);
-  const chunks = content.chunks.map((item) => item.replaceAll('{{name}}', firstName));
+  const phrase = session.phrase.replaceAll('{{name}}', firstName);
+  const chunks = session.chunks.map((item) => item.replaceAll('{{name}}', firstName));
 
   const [step, setStep] = useState(0);
   const [heard, setHeard] = useState(false);
@@ -134,6 +43,7 @@ export default function TrainingSession({ fullName, mode, score }) {
   const [roleChoice, setRoleChoice] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordingBlob, setRecordingBlob] = useState(null);
+  const [recordingUrl, setRecordingUrl] = useState('');
   const [speakingSeconds, setSpeakingSeconds] = useState(0);
   const [spokenFallback, setSpokenFallback] = useState(false);
   const [micError, setMicError] = useState('');
@@ -145,6 +55,24 @@ export default function TrainingSession({ fullName, mode, score }) {
   const streamRef = useRef(null);
   const startTimeRef = useRef(null);
 
+  const modeLabel = useMemo(() => mode.replaceAll('_', ' '), [mode]);
+
+  useEffect(() => {
+    if (!recordingBlob) {
+      setRecordingUrl('');
+      return undefined;
+    }
+
+    const url = URL.createObjectURL(recordingBlob);
+    setRecordingUrl(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [recordingBlob]);
+
+  useEffect(() => () => {
+    streamRef.current?.getTracks?.().forEach((track) => track.stop());
+  }, []);
+
   const next = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setStep((value) => Math.min(5, value + 1));
@@ -153,6 +81,11 @@ export default function TrainingSession({ fullName, mode, score }) {
   const startRecording = async () => {
     try {
       setMicError('');
+
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        throw new Error('unsupported');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
@@ -168,9 +101,11 @@ export default function TrainingSession({ fullName, mode, score }) {
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         const duration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
-        setSpeakingSeconds(duration);
+
+        setSpeakingSeconds((value) => Math.max(value, duration));
         setRecordingBlob(blob);
         setRecording(false);
+
         stream.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       };
@@ -178,7 +113,7 @@ export default function TrainingSession({ fullName, mode, score }) {
       recorder.start();
       setRecording(true);
     } catch {
-      setMicError('Microphone access is unavailable here. Practice the prompt out loud and mark it complete below.');
+      setMicError('Microphone access is unavailable here. Practice the prompt out loud and use the manual completion button.');
     }
   };
 
@@ -190,6 +125,7 @@ export default function TrainingSession({ fullName, mode, score }) {
 
   const finishSession = async () => {
     setSaving(true);
+    setMicError('');
 
     try {
       const response = await fetch('/api/training-progress', {
@@ -197,7 +133,7 @@ export default function TrainingSession({ fullName, mode, score }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           module_key: mode.toLowerCase(),
-          session_key: 'session-01',
+          session_key: session.key,
           completion_percent: 100,
           speaking_seconds: speakingSeconds || (spokenFallback ? 30 : 0),
           xp: 100,
@@ -212,6 +148,7 @@ export default function TrainingSession({ fullName, mode, score }) {
 
       setCompleted(true);
       router.refresh();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       setMicError(error.message || 'Could not save progress.');
     } finally {
@@ -224,17 +161,29 @@ export default function TrainingSession({ fullName, mode, score }) {
       <div className={styles.sessionShell}>
         <section className={`${styles.stage} ${styles.completeStage}`}>
           <div className={styles.completeIcon}>✓</div>
-          <span className={styles.kicker}>SESSION COMPLETE</span>
+          <span className={styles.kicker}>SESSION {String(sessionNumber).padStart(2, '0')} COMPLETE</span>
           <h1>+100 Speaking XP</h1>
           <p>
-            You completed your first {content.label} session. Your progress and speaking time are saved.
+            You completed <strong>{session.title}</strong> in {modeLabel}. Your progress and speaking time are saved.
           </p>
+
           <div className={styles.completeActions}>
-            <button className={styles.primary} onClick={() => router.push('/dashboard')}>
-              Back to dashboard
-            </button>
+            {nextSessionKey ? (
+              <button className={styles.primary} onClick={() => router.push(`/train/${nextSessionKey}`)}>
+                Continue to Session {String(sessionNumber + 1).padStart(2, '0')}
+              </button>
+            ) : (
+              <button className={styles.primary} onClick={() => router.push('/train')}>
+                View completed block
+              </button>
+            )}
+
             <button className={styles.secondary} onClick={() => router.push('/phrases')}>
               Review Power Phrases
+            </button>
+
+            <button className={styles.secondary} onClick={() => router.push('/dashboard')}>
+              Back to dashboard
             </button>
           </div>
         </section>
@@ -246,10 +195,13 @@ export default function TrainingSession({ fullName, mode, score }) {
     <div className={styles.sessionShell}>
       <header className={styles.sessionHeader}>
         <div>
-          <span className={styles.kicker}>{content.label} · SESSION 01</span>
-          <h1>{content.title}</h1>
-          <p>{content.subtitle}</p>
+          <span className={styles.kicker}>
+            {modeLabel} · SESSION {String(sessionNumber).padStart(2, '0')} OF {String(totalSessions).padStart(2, '0')}
+          </span>
+          <h1>{session.title}</h1>
+          <p>{session.subtitle}</p>
         </div>
+
         <div className={styles.scoreBadge}>
           <strong>{score}</strong>
           <span>placement</span>
@@ -297,7 +249,9 @@ export default function TrainingSession({ fullName, mode, score }) {
         <section className={styles.stage}>
           <span className={styles.stageNumber}>02 · COPY IT</span>
           <h2>Copy the rhythm.</h2>
-          <p className={styles.guidance}>Play each block and repeat it out loud. Complete at least three repetitions.</p>
+          <p className={styles.guidance}>
+            Play each block and repeat it out loud. Complete at least three deliberate repetitions.
+          </p>
 
           <div className={styles.chunkList}>
             {chunks.map((chunk) => (
@@ -326,10 +280,10 @@ export default function TrainingSession({ fullName, mode, score }) {
         <section className={styles.stage}>
           <span className={styles.stageNumber}>03 · BUILD IT</span>
           <h2>Make the structure yours.</h2>
-          <p className={styles.guidance}>{content.buildPrompt}</p>
+          <p className={styles.guidance}>{session.buildPrompt}</p>
 
           <div className={styles.buildBox}>
-            <strong>{content.buildStem}</strong>
+            <strong>{session.buildStem}</strong>
             <input
               value={buildAnswer}
               onChange={(event) => setBuildAnswer(event.target.value)}
@@ -347,7 +301,7 @@ export default function TrainingSession({ fullName, mode, score }) {
         <section className={styles.stage}>
           <span className={styles.stageNumber}>04 · ANSWER IT</span>
           <h2>Respond without overthinking.</h2>
-          <p className={styles.promptCard}>{content.quickPrompt}</p>
+          <p className={styles.promptCard}>{session.quickPrompt}</p>
 
           <textarea
             className={styles.answerArea}
@@ -369,10 +323,10 @@ export default function TrainingSession({ fullName, mode, score }) {
         <section className={styles.stage}>
           <span className={styles.stageNumber}>05 · USE IT</span>
           <h2>Choose your move.</h2>
-          <p className={styles.promptCard}>{content.rolePrompt}</p>
+          <p className={styles.promptCard}>{session.rolePrompt}</p>
 
           <div className={styles.roleOptions}>
-            {content.roleOptions.map((option, index) => (
+            {session.roleOptions.map((option, index) => (
               <button
                 key={option}
                 onClick={() => setRoleChoice(index)}
@@ -386,7 +340,7 @@ export default function TrainingSession({ fullName, mode, score }) {
 
           {roleChoice !== null ? (
             <div className={styles.feedback}>
-              {roleChoice === content.best
+              {roleChoice === session.best
                 ? 'Natural choice. It responds, adds something useful and keeps the conversation open.'
                 : 'Try the first option once out loud. Listen for the complete conversational thought.'}
             </div>
@@ -402,10 +356,10 @@ export default function TrainingSession({ fullName, mode, score }) {
         <section className={styles.stage}>
           <span className={styles.stageNumber}>06 · SPEAK IT</span>
           <h2>Put everything together.</h2>
-          <p className={styles.promptCard}>{content.speakPrompt}</p>
+          <p className={styles.promptCard}>{session.speakPrompt}</p>
 
           <div className={styles.powerRow}>
-            {content.power.map((item) => <span key={item}>{item}</span>)}
+            {session.power.map((item) => <span key={item}>{item}</span>)}
           </div>
 
           <div className={styles.recordBox}>
@@ -419,8 +373,8 @@ export default function TrainingSession({ fullName, mode, score }) {
               </button>
             )}
 
-            {recordingBlob ? (
-              <audio className={styles.audioPlayback} controls src={URL.createObjectURL(recordingBlob)} />
+            {recordingUrl ? (
+              <audio className={styles.audioPlayback} controls src={recordingUrl} />
             ) : null}
 
             <button
