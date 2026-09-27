@@ -25,7 +25,7 @@ export default async function LivePage() {
       .maybeSingle(),
     supabase
       .from('live_sessions')
-      .select('id, session_type, duration_minutes, preferred_start, timezone, topic, status, coach_name, meeting_url, created_at')
+      .select('id, session_type, duration_minutes, preferred_start, timezone, topic, status, coach_name, meeting_url, coach_feedback, homework, created_at')
       .eq('user_id', claims.sub)
       .order('preferred_start', { ascending: false })
       .limit(12),

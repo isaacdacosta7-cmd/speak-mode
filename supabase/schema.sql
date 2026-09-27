@@ -107,7 +107,7 @@ create table if not exists public.training_progress (
 alter table public.training_progress enable row level security;
 
 revoke all on table public.training_progress from anon, authenticated;
-grant select, insert, update on table public.training_progress to authenticated;
+grant select on table public.training_progress to authenticated;
 grant usage, select on sequence public.training_progress_id_seq to authenticated;
 
 drop policy if exists "Users can read their own progress" on public.training_progress;
@@ -157,7 +157,7 @@ create table if not exists public.placement_attempts (
 alter table public.placement_attempts enable row level security;
 
 revoke all on table public.placement_attempts from anon, authenticated;
-grant select, insert on table public.placement_attempts to authenticated;
+grant select on table public.placement_attempts to authenticated;
 grant usage, select on sequence public.placement_attempts_id_seq to authenticated;
 
 drop policy if exists "Users can read their own placement attempts"
@@ -237,12 +237,20 @@ create table if not exists public.live_sessions (
     check (status in ('pending','confirmed','completed','cancelled','no_show')),
   coach_name text,
   meeting_url text,
+  coach_feedback text,
+  homework text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index if not exists live_sessions_user_month_idx
   on public.live_sessions (user_id, preferred_start);
+
+create index if not exists profiles_plan_code_idx
+  on public.profiles (plan_code);
+
+create index if not exists live_sessions_plan_code_idx
+  on public.live_sessions (plan_code);
 
 alter table public.plans enable row level security;
 alter table public.live_sessions enable row level security;

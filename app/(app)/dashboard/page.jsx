@@ -1,14 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-
-const sessionNames = {
-  START_MODE: 'Introduce Yourself',
-  RESPONSE_MODE: 'Answer Without Freezing',
-  CONVERSATION_MODE: 'Keep It Going',
-  FLUENCY_MODE: 'Sound More Natural',
-  NATIVE_FLOW: 'Precision & Personality',
-};
+import { getModeSessions } from '@/lib/curriculum';
 
 function titleCaseMode(mode) {
   return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
@@ -37,17 +30,47 @@ export default async function DashboardPage() {
       .eq('user_id', claims.sub),
   ]);
 
-  const firstName = profile?.full_name?.trim()?.split(/\s+/)[0] || claims.email?.split('@')[0] || 'Student';
+  const firstName =
+    profile?.full_name?.trim()?.split(/\s+/)[0] ||
+    claims.email?.split('@')[0] ||
+    'Student';
+
   const progress = progressRows || [];
   const xp = progress.reduce((total, row) => total + (row.xp || 0), 0);
   const speakingSeconds = progress.reduce((total, row) => total + (row.speaking_seconds || 0), 0);
   const speakingMinutes = Math.floor(speakingSeconds / 60);
-  const completedSessions = progress.filter((row) => row.completion_percent >= 100).length;
-  const firstSession = progress.find((row) => row.session_key === 'session-01');
-  const sessionProgress = firstSession?.completion_percent || 0;
+  const completedActivities = progress.filter((row) => row.completion_percent >= 100).length;
+
   const mode = titleCaseMode(profile?.placement_mode);
-  const needsPlacement = profile?.placement_score == null;
-  const sessionTitle = sessionNames[profile?.placement_mode] || 'Your First Conversation Session';
+  const needsPlacement = profile?.placement_score == null || !profile?.placement_mode;
+
+  const sessions = needsPlacement ? [] : getModeSessions(profile.placement_mode);
+  const progressMap = new Map(progress.map((row) => [row.session_key, row]));
+
+  const completedCoreSessions = sessions.filter(
+    (session) => (progressMap.get(session.key)?.completion_percent || 0) >= 100
+  ).length;
+
+  const firstIncompleteIndex = sessions.findIndex(
+    (session) => (progressMap.get(session.key)?.completion_percent || 0) < 100
+  );
+
+  const activeIndex = needsPlacement
+    ? -1
+    : firstIncompleteIndex === -1
+      ? sessions.length - 1
+      : firstIncompleteIndex;
+
+  const activeSession = activeIndex >= 0 ? sessions[activeIndex] : null;
+  const activeProgress = activeSession
+    ? progressMap.get(activeSession.key)?.completion_percent || 0
+    : 0;
+
+  const blockPercent = sessions.length
+    ? Math.round((completedCoreSessions / sessions.length) * 100)
+    : 0;
+
+  const blockComplete = sessions.length > 0 && completedCoreSessions === sessions.length;
 
   return (
     <div className="dashboard-stack">
@@ -58,37 +81,51 @@ export default async function DashboardPage() {
           <p>
             {needsPlacement
               ? 'Your account is active. Complete the placement test to unlock your personalized conversation path.'
-              : `You are in ${mode}. Your first active training session is ready.`}
+              : blockComplete
+                ? `You completed Block 01 in ${mode}. You can review any session while the next block is prepared.`
+                : `You are in ${mode}. Session ${String(activeIndex + 1).padStart(2, '0')} is ready for you.`}
           </p>
         </div>
 
         <div className="streak-pill">
           <span>⚡</span>
-          <strong>{completedSessions}</strong>
-          <small>sessions done</small>
+          <strong>{completedCoreSessions}</strong>
+          <small>core sessions</small>
         </div>
       </section>
 
       <section className="continue-card">
         <div className="continue-top">
           <div>
-            <span className="tiny-label">{needsPlacement ? 'YOUR NEXT STEP' : 'CONTINUE TRAINING'}</span>
-            <h2>{needsPlacement ? 'Take your 15-minute placement test' : `Session 01 · ${sessionTitle}`}</h2>
+            <span className="tiny-label">
+              {needsPlacement
+                ? 'YOUR NEXT STEP'
+                : blockComplete
+                  ? 'BLOCK 01 COMPLETE'
+                  : `CONTINUE · SESSION ${String(activeIndex + 1).padStart(2, '0')} OF ${String(sessions.length).padStart(2, '0')}`}
+            </span>
+
+            <h2>
+              {needsPlacement
+                ? 'Take your 15-minute placement test'
+                : activeSession?.title}
+            </h2>
+
             <p>
               {needsPlacement
                 ? 'Listening · Reaction · Real English · Writing · 100 points'
-                : 'Hear → Copy → Build → Answer → Use → Speak'}
+                : activeSession?.subtitle}
             </p>
           </div>
 
           <div className="progress-orb">
-            <strong>{needsPlacement ? '0%' : `${sessionProgress}%`}</strong>
-            <span>{needsPlacement ? 'ready' : 'done'}</span>
+            <strong>{needsPlacement ? '0%' : blockComplete ? '100%' : `${activeProgress}%`}</strong>
+            <span>{needsPlacement ? 'ready' : blockComplete ? 'block' : 'session'}</span>
           </div>
         </div>
 
         <div className="progress-track">
-          <span style={{ width: needsPlacement ? '0%' : `${sessionProgress}%` }} />
+          <span style={{ width: needsPlacement ? '0%' : `${blockPercent}%` }} />
         </div>
 
         <div className="session-meta">
@@ -101,19 +138,31 @@ export default async function DashboardPage() {
             </>
           ) : (
             <>
-              <span>🎧 Natural audio</span>
-              <span>🗣 Repetition</span>
-              <span>⚡ Quick answers</span>
-              <span>🎙 Speaking</span>
+              <span>🎧 Hear</span>
+              <span>🗣 Copy</span>
+              <span>✍️ Build</span>
+              <span>⚡ Answer</span>
+              <span>💬 Use</span>
+              <span>🎙 Speak</span>
             </>
           )}
         </div>
 
         <Link
-          href={needsPlacement ? '/placement-test' : '/train/session-01'}
+          href={
+            needsPlacement
+              ? '/placement-test'
+              : blockComplete
+                ? '/train'
+                : `/train/${activeSession.key}`
+          }
           className="button button-primary"
         >
-          {needsPlacement ? 'Start placement test →' : sessionProgress >= 100 ? 'Practice again →' : 'Start session →'}
+          {needsPlacement
+            ? 'Start placement test →'
+            : blockComplete
+              ? 'Review completed block →'
+              : 'Continue training →'}
         </Link>
       </section>
 
@@ -122,14 +171,14 @@ export default async function DashboardPage() {
           <span className="metric-icon">⚡</span>
           <strong>{xp}</strong>
           <small>Speaking XP</small>
-          <em>Earn XP as you complete training</em>
+          <em>Earn XP through training and speaking practice</em>
         </article>
 
         <article className="metric-card">
           <span className="metric-icon">✓</span>
-          <strong>{completedSessions}</strong>
-          <small>Sessions Completed</small>
-          <em>Your completed training sessions</em>
+          <strong>{completedActivities}</strong>
+          <small>Activities Completed</small>
+          <em>{completedCoreSessions}/{sessions.length || 0} core sessions in this block</em>
         </article>
 
         <article className="metric-card">
@@ -147,7 +196,7 @@ export default async function DashboardPage() {
           <p>
             {needsPlacement
               ? 'Your placement result will appear here immediately after the test.'
-              : `Placement score: ${profile.placement_score}/100.`}
+              : `Placement score: ${profile.placement_score}/100 · Block 01: ${blockPercent}% complete.`}
           </p>
           <Link href={needsPlacement ? '/placement-test' : '/placement-result'} className="text-link">
             {needsPlacement ? 'Take placement test →' : 'View placement result →'}
@@ -155,10 +204,10 @@ export default async function DashboardPage() {
         </article>
 
         <article className="panel-card accent-panel">
-          <span className="tiny-label">POWER PHRASES</span>
-          <h3>Train the phrases you want to become automatic.</h3>
-          <p>Listen, repeat and revisit useful conversation blocks between sessions.</p>
-          <Link href="/phrases" className="text-link">Open Power Phrases →</Link>
+          <span className="tiny-label">SPEAK LAB</span>
+          <h3>Practice spontaneous conversation between sessions.</h3>
+          <p>Your guided conversation room adapts to your current Speak Mode.</p>
+          <Link href="/speak" className="text-link">Open Speak Lab →</Link>
         </article>
       </section>
     </div>
