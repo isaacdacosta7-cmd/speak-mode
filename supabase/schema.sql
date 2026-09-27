@@ -196,3 +196,98 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function private.handle_new_user();
+
+
+-- =========================================================
+-- Speak Mode plans, live coaching, and phrase practice
+-- =========================================================
+
+create table if not exists public.plans (
+  code text primary key,
+  name text not null,
+  live_sessions_per_month integer not null default 0
+    check (live_sessions_per_month >= 0 and live_sessions_per_month <= 20),
+  live_session_minutes integer not null default 0
+    check (live_session_minutes >= 0 and live_session_minutes <= 180),
+  live_session_type text not null default 'none'
+    check (live_session_type in ('none','group','one_to_one')),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profiles
+  add column if not exists plan_code text not null default 'digital'
+    references public.plans(code);
+
+alter table public.profiles
+  add column if not exists subscription_status text not null default 'free'
+    check (subscription_status in ('free','active','past_due','cancelled'));
+
+create table if not exists public.live_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  plan_code text not null references public.plans(code),
+  session_type text not null check (session_type in ('group','one_to_one')),
+  duration_minutes integer not null check (duration_minutes between 15 and 180),
+  preferred_start timestamptz not null,
+  timezone text not null,
+  topic text,
+  status text not null default 'pending'
+    check (status in ('pending','confirmed','completed','cancelled','no_show')),
+  coach_name text,
+  meeting_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists live_sessions_user_month_idx
+  on public.live_sessions (user_id, preferred_start);
+
+alter table public.plans enable row level security;
+alter table public.live_sessions enable row level security;
+
+revoke all on table public.plans from anon, authenticated;
+grant select on table public.plans to authenticated;
+
+drop policy if exists "Authenticated users can view active plans" on public.plans;
+create policy "Authenticated users can view active plans"
+on public.plans
+for select
+to authenticated
+using (active = true);
+
+revoke all on table public.live_sessions from anon, authenticated;
+grant select on table public.live_sessions to authenticated;
+
+drop policy if exists "Users can read their own live sessions" on public.live_sessions;
+create policy "Users can read their own live sessions"
+on public.live_sessions
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create table if not exists public.phrase_progress (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  phrase_key text not null,
+  repetitions integer not null default 0 check (repetitions >= 0 and repetitions <= 1000),
+  progress_percent integer not null default 0 check (progress_percent between 0 and 100),
+  last_practiced_at timestamptz not null default now(),
+  unique (user_id, phrase_key)
+);
+
+alter table public.phrase_progress enable row level security;
+
+revoke all on table public.phrase_progress from anon, authenticated;
+grant select on table public.phrase_progress to authenticated;
+
+drop policy if exists "Users can read their own phrase progress" on public.phrase_progress;
+create policy "Users can read their own phrase progress"
+on public.phrase_progress
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+-- Write access for placement, training, phrase practice, and live coaching
+-- is intentionally handled through authenticated SECURITY DEFINER RPCs.
