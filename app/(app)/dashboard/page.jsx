@@ -2,6 +2,14 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
+const sessionNames = {
+  START_MODE: 'Introduce Yourself',
+  RESPONSE_MODE: 'Answer Without Freezing',
+  CONVERSATION_MODE: 'Keep It Going',
+  FLUENCY_MODE: 'Sound More Natural',
+  NATIVE_FLOW: 'Precision & Personality',
+};
+
 function titleCaseMode(mode) {
   return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
 }
@@ -35,9 +43,11 @@ export default async function DashboardPage() {
   const speakingSeconds = progress.reduce((total, row) => total + (row.speaking_seconds || 0), 0);
   const speakingMinutes = Math.floor(speakingSeconds / 60);
   const completedSessions = progress.filter((row) => row.completion_percent >= 100).length;
-  const firstSession = progress.find((row) => row.session_key === 'start-01');
+  const firstSession = progress.find((row) => row.session_key === 'session-01');
   const sessionProgress = firstSession?.completion_percent || 0;
   const mode = titleCaseMode(profile?.placement_mode);
+  const needsPlacement = profile?.placement_score == null;
+  const sessionTitle = sessionNames[profile?.placement_mode] || 'Your First Conversation Session';
 
   return (
     <div className="dashboard-stack">
@@ -46,9 +56,9 @@ export default async function DashboardPage() {
           <span className="eyebrow">WELCOME, {firstName.toUpperCase()}</span>
           <h1>Ready for today’s English?</h1>
           <p>
-            {profile?.placement_score == null
-              ? 'Your account is active. Your placement result will determine the training path that appears here.'
-              : `You are in ${mode}. Your training will adapt to the level assigned by your placement result.`}
+            {needsPlacement
+              ? 'Your account is active. Complete the placement test to unlock your personalized conversation path.'
+              : `You are in ${mode}. Your first active training session is ready.`}
           </p>
         </div>
 
@@ -62,31 +72,48 @@ export default async function DashboardPage() {
       <section className="continue-card">
         <div className="continue-top">
           <div>
-            <span className="tiny-label">{profile?.placement_score == null ? 'NEXT STEP' : 'CONTINUE TRAINING'}</span>
-            <h2>{profile?.placement_score == null ? 'Connect your placement result' : 'Session 01 · Introduce Yourself'}</h2>
+            <span className="tiny-label">{needsPlacement ? 'YOUR NEXT STEP' : 'CONTINUE TRAINING'}</span>
+            <h2>{needsPlacement ? 'Take your 15-minute placement test' : `Session 01 · ${sessionTitle}`}</h2>
             <p>
-              {profile?.placement_score == null
-                ? 'Once your test score is saved, Speak Mode will unlock the correct learning path.'
-                : 'Listen → Repeat → Build → Answer → Speak'}
+              {needsPlacement
+                ? 'Listening · Reaction · Real English · Writing · 100 points'
+                : 'Hear → Copy → Build → Answer → Use → Speak'}
             </p>
           </div>
 
           <div className="progress-orb">
-            <strong>{sessionProgress}%</strong>
-            <span>done</span>
+            <strong>{needsPlacement ? '0%' : `${sessionProgress}%`}</strong>
+            <span>{needsPlacement ? 'ready' : 'done'}</span>
           </div>
         </div>
 
-        <div className="progress-track"><span style={{ width: `${sessionProgress}%` }} /></div>
-
-        <div className="session-meta">
-          <span>🎧 Listening</span>
-          <span>🎙 Speaking</span>
-          <span>⚡ Quick answers</span>
+        <div className="progress-track">
+          <span style={{ width: needsPlacement ? '0%' : `${sessionProgress}%` }} />
         </div>
 
-        <Link href="/train" className="button button-primary">
-          {profile?.placement_score == null ? 'Preview training →' : 'Start session →'}
+        <div className="session-meta">
+          {needsPlacement ? (
+            <>
+              <span>🎧 Listening</span>
+              <span>⚡ Reaction</span>
+              <span>💬 Real English</span>
+              <span>✍️ Writing</span>
+            </>
+          ) : (
+            <>
+              <span>🎧 Natural audio</span>
+              <span>🗣 Repetition</span>
+              <span>⚡ Quick answers</span>
+              <span>🎙 Speaking</span>
+            </>
+          )}
+        </div>
+
+        <Link
+          href={needsPlacement ? '/placement-test' : '/train/session-01'}
+          className="button button-primary"
+        >
+          {needsPlacement ? 'Start placement test →' : sessionProgress >= 100 ? 'Practice again →' : 'Start session →'}
         </Link>
       </section>
 
@@ -118,18 +145,20 @@ export default async function DashboardPage() {
           <span className="tiny-label">CURRENT MODE</span>
           <h3>{mode}</h3>
           <p>
-            {profile?.placement_score == null
-              ? 'Your placement score is waiting to be connected to this account.'
+            {needsPlacement
+              ? 'Your placement result will appear here immediately after the test.'
               : `Placement score: ${profile.placement_score}/100.`}
           </p>
-          <Link href="/profile" className="text-link">View profile →</Link>
+          <Link href={needsPlacement ? '/placement-test' : '/profile'} className="text-link">
+            {needsPlacement ? 'Take placement test →' : 'View profile →'}
+          </Link>
         </article>
 
         <article className="panel-card accent-panel">
-          <span className="tiny-label">LIVE COACH</span>
-          <h3>Your human conversation layer.</h3>
-          <p>Coach sessions will unlock according to your training plan and progress.</p>
-          <Link href="/live" className="text-link">View Live area →</Link>
+          <span className="tiny-label">POWER PHRASES</span>
+          <h3>Train the phrases you want to become automatic.</h3>
+          <p>Listen, repeat and revisit useful conversation blocks between sessions.</p>
+          <Link href="/phrases" className="text-link">Open Power Phrases →</Link>
         </article>
       </section>
     </div>
