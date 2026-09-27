@@ -21,7 +21,7 @@ export default async function PhrasesPage() {
       .maybeSingle(),
     supabase
       .from('phrase_progress')
-      .select('phrase_key, repetitions, progress_percent, last_practiced_at')
+      .select('phrase_key, repetitions, progress_percent, review_stage, next_review_at, last_practiced_at')
       .eq('user_id', claims.sub),
   ]);
 
