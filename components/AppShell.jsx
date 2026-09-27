@@ -2,14 +2,15 @@ import Link from 'next/link';
 import Brand from '@/components/Brand';
 import LogoutButton from '@/components/LogoutButton';
 import BetaFeedback from '@/components/BetaFeedback';
+import SoundToggle from '@/components/SoundToggle';
 
 const navItems = [
-  ['⌂', 'Home', '/dashboard'],
-  ['☀', 'Daily', '/daily'],
-  ['▶', 'Train', '/train'],
-  ['✦', 'Phrases', '/phrases'],
-  ['◉', 'Live', '/live'],
-  ['◎', 'Profile', '/profile'],
+  ['🏠', 'Home', '/dashboard'],
+  ['☀️', 'Daily', '/daily'],
+  ['🎯', 'Train', '/train'],
+  ['✨', 'Phrases', '/phrases'],
+  ['👥', 'Live', '/live'],
+  ['👤', 'Profile', '/profile'],
 ];
 
 function initials(name, email) {
@@ -34,11 +35,11 @@ export default function AppShell({ children, user }) {
   let visibleNav = [...navItems];
 
   if (['coach', 'admin'].includes(user?.role)) {
-    visibleNav.push(['◇', 'Coach', '/coach/live']);
+    visibleNav.push(['🎧', 'Coach', '/coach/live']);
   }
 
   if (user?.role === 'admin') {
-    visibleNav.push(['▦', 'Admin', '/admin']);
+    visibleNav.push(['📊', 'Admin', '/admin']);
   }
 
   return (
@@ -69,16 +70,19 @@ export default function AppShell({ children, user }) {
         <header className="topbar">
           <div>
             <span className="topbar-kicker">SPEAK MODE</span>
-            <span className="topbar-status"><i /> Beta active</span>
+            <span className="topbar-status"><i /> ✨ Beta active</span>
           </div>
 
-          <Link href="/profile" className="profile-chip">
+          <div className="topbar-actions">
+            <SoundToggle />
+            <Link href="/profile" className="profile-chip">
             <div className="avatar">{initials(user?.fullName, user?.email)}</div>
             <div>
               <strong>{displayName}</strong>
               <span>{mode}</span>
             </div>
-          </Link>
+            </Link>
+          </div>
         </header>
 
         <main className="content">{children}</main>
