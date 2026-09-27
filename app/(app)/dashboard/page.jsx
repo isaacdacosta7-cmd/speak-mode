@@ -149,8 +149,8 @@ export default async function DashboardPage() {
               ? 'Your placement result will appear here immediately after the test.'
               : `Placement score: ${profile.placement_score}/100.`}
           </p>
-          <Link href={needsPlacement ? '/placement-test' : '/profile'} className="text-link">
-            {needsPlacement ? 'Take placement test →' : 'View profile →'}
+          <Link href={needsPlacement ? '/placement-test' : '/placement-result'} className="text-link">
+            {needsPlacement ? 'Take placement test →' : 'View placement result →'}
           </Link>
         </article>
 
