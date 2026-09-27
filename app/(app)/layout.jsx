@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import TimezoneSync from '@/components/TimezoneSync';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export default async function TrainingLayout({ children }) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, placement_score, placement_mode, role')
+    .select('full_name, placement_score, placement_mode, role, timezone')
     .eq('id', claims.sub)
     .maybeSingle();
 
@@ -28,5 +29,10 @@ export default async function TrainingLayout({ children }) {
     role: profile?.role || 'student',
   };
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <>
+      <TimezoneSync currentTimezone={profile?.timezone || 'UTC'} />
+      <AppShell user={user}>{children}</AppShell>
+    </>
+  );
 }
