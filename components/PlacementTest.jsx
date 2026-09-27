@@ -452,6 +452,7 @@ export default function PlacementTest({ fullName, previousScore, previousMode })
     ctx.fill();
 
     ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
     ctx.roundRect(90, 100, 1020, 1300, 48);
     ctx.fill();
 
@@ -497,10 +498,12 @@ export default function PlacementTest({ fullName, previousScore, previousMode })
       ctx.fillText(`${value}/${max}`, 850, y);
 
       ctx.fillStyle = '#e7e8e1';
+      ctx.beginPath();
       ctx.roundRect(150, y + 25, 820, 16, 8);
       ctx.fill();
 
       ctx.fillStyle = '#6570ff';
+      ctx.beginPath();
       ctx.roundRect(150, y + 25, 820 * (value / max), 16, 8);
       ctx.fill();
 
