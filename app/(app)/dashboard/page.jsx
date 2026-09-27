@@ -7,6 +7,41 @@ function titleCaseMode(mode) {
   return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
 }
 
+function localDateString(timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function shiftDate(dateString, delta) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+function computeStreak(rows, today) {
+  const completed = new Set(
+    rows.filter((row) => row.completed).map((row) => row.activity_date)
+  );
+
+  let cursor = completed.has(today) ? today : shiftDate(today, -1);
+  let streak = 0;
+
+  while (completed.has(cursor)) {
+    streak += 1;
+    cursor = shiftDate(cursor, -1);
+  }
+
+  return streak;
+}
+
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
@@ -18,16 +53,22 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  const [{ data: profile }, { data: progressRows }] = await Promise.all([
+  const [{ data: profile }, { data: progressRows }, { data: dailyRows }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('full_name, placement_score, placement_mode, daily_goal_minutes')
+      .select('full_name, placement_score, placement_mode, daily_goal_minutes, timezone')
       .eq('id', claims.sub)
       .maybeSingle(),
     supabase
       .from('training_progress')
       .select('session_key, completion_percent, speaking_seconds, xp')
       .eq('user_id', claims.sub),
+    supabase
+      .from('daily_activity')
+      .select('activity_date, completed')
+      .eq('user_id', claims.sub)
+      .order('activity_date', { ascending: false })
+      .limit(60),
   ]);
 
   const firstName =
@@ -71,6 +112,9 @@ export default async function DashboardPage() {
     : 0;
 
   const blockComplete = sessions.length > 0 && completedCoreSessions === sessions.length;
+  const today = localDateString(profile?.timezone || 'UTC');
+  const streak = computeStreak(dailyRows || [], today);
+  const todayComplete = Boolean((dailyRows || []).find((row) => row.activity_date === today)?.completed);
 
   return (
     <div className="dashboard-stack">
@@ -81,16 +125,16 @@ export default async function DashboardPage() {
           <p>
             {needsPlacement
               ? 'Your account is active. Complete the placement test to unlock your personalized conversation path.'
-              : blockComplete
-                ? `You completed Block 01 in ${mode}. You can review any session while the next block is prepared.`
-                : `You are in ${mode}. Session ${String(activeIndex + 1).padStart(2, '0')} is ready for you.`}
+              : todayComplete
+                ? `Daily Speak is complete. Your ${mode} training path is still available for extra practice.`
+                : `Your Daily Speak routine is waiting. You are currently training in ${mode}.`}
           </p>
         </div>
 
         <div className="streak-pill">
-          <span>⚡</span>
-          <strong>{completedCoreSessions}</strong>
-          <small>core sessions</small>
+          <span>🔥</span>
+          <strong>{streak}</strong>
+          <small>day streak</small>
         </div>
       </section>
 
@@ -168,17 +212,17 @@ export default async function DashboardPage() {
 
       <section className="dashboard-grid">
         <article className="metric-card">
-          <span className="metric-icon">⚡</span>
-          <strong>{xp}</strong>
-          <small>Speaking XP</small>
-          <em>Earn XP through training and speaking practice</em>
+          <span className="metric-icon">🔥</span>
+          <strong>{streak}</strong>
+          <small>Daily Speak Streak</small>
+          <em>{todayComplete ? 'Today is complete' : 'Finish Daily Speak to extend it'}</em>
         </article>
 
         <article className="metric-card">
-          <span className="metric-icon">✓</span>
-          <strong>{completedActivities}</strong>
-          <small>Activities Completed</small>
-          <em>{completedCoreSessions}/{sessions.length || 0} core sessions in this block</em>
+          <span className="metric-icon">⚡</span>
+          <strong>{xp}</strong>
+          <small>Speaking XP</small>
+          <em>{completedActivities} completed activities</em>
         </article>
 
         <article className="metric-card">
@@ -190,6 +234,13 @@ export default async function DashboardPage() {
       </section>
 
       <section className="split-grid">
+        <article className="panel-card accent-panel">
+          <span className="tiny-label">DAILY SPEAK</span>
+          <h3>{todayComplete ? 'Today’s mission is complete.' : 'Your three-part daily routine is ready.'}</h3>
+          <p>Train once, practice three Power Phrases and complete one quick English challenge.</p>
+          <Link href="/daily" className="text-link">Open Daily Speak →</Link>
+        </article>
+
         <article className="panel-card">
           <span className="tiny-label">CURRENT MODE</span>
           <h3>{mode}</h3>
@@ -202,13 +253,12 @@ export default async function DashboardPage() {
             {needsPlacement ? 'Take placement test →' : 'View placement result →'}
           </Link>
         </article>
+      </section>
 
-        <article className="panel-card accent-panel">
-          <span className="tiny-label">SPEAK LAB</span>
-          <h3>Practice spontaneous conversation between sessions.</h3>
-          <p>Your guided conversation room adapts to your current Speak Mode.</p>
-          <Link href="/speak" className="text-link">Open Speak Lab →</Link>
-        </article>
+      <section className="panel-card">
+        <span className="tiny-label">VOICE CONVERSATION</span>
+        <h3>Voice Conversation is temporarily held for the beta infrastructure upgrade.</h3>
+        <p>Structured training, Daily Speak, Power Phrases and Live human sessions remain active while the production speech service is integrated.</p>
       </section>
     </div>
   );
