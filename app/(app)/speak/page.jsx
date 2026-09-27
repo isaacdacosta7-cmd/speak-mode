@@ -1,14 +1,32 @@
-export default function SpeakPage() {
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import GuidedConversation from '@/components/GuidedConversation';
+
+export const dynamic = 'force-dynamic';
+
+export default async function SpeakPage() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+
+  if (error || !claims?.sub) {
+    redirect('/login?next=/speak');
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, placement_mode')
+    .eq('id', claims.sub)
+    .maybeSingle();
+
+  if (!profile?.placement_mode) {
+    redirect('/placement-test');
+  }
+
   return (
-    <div className="page-stack">
-      <header className="page-header"><span className="eyebrow">SPEAK LAB</span><h1>Your conversation room.</h1><p>AI role plays, quick responses and open conversation will live here.</p></header>
-      <section className="voice-stage">
-        <div className="voice-rings"><div className="voice-core">🎙</div></div>
-        <span className="tiny-label">COMING NEXT</span>
-        <h2>“Hi! Tell me a little about yourself.”</h2>
-        <p>The first interactive conversation will be connected after authentication and speech services are configured.</p>
-        <button className="button button-primary" disabled>Start conversation</button>
-      </section>
-    </div>
+    <GuidedConversation
+      fullName={profile.full_name || claims.email?.split('@')[0] || 'Student'}
+      mode={profile.placement_mode}
+    />
   );
 }
