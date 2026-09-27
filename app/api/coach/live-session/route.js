@@ -21,6 +21,8 @@ export async function POST(request) {
     p_status: body.status,
     p_coach_name: body.coach_name || null,
     p_meeting_url: body.meeting_url || null,
+    p_coach_feedback: body.coach_feedback || null,
+    p_homework: body.homework || null,
   });
 
   if (manageError || !result?.length) {
