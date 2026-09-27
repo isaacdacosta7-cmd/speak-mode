@@ -150,6 +150,23 @@ export default function LiveBooking({ plan, used, sessions, subscriptionActive }
                 ) : (
                   <small>Meeting link pending confirmation</small>
                 )}
+
+                {session.coach_feedback || session.homework ? (
+                  <div className={styles.feedbackBlock}>
+                    {session.coach_feedback ? (
+                      <div>
+                        <b>Coach feedback</b>
+                        <p>{session.coach_feedback}</p>
+                      </div>
+                    ) : null}
+                    {session.homework ? (
+                      <div>
+                        <b>Next focus</b>
+                        <p>{session.homework}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
