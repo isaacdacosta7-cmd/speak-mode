@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './DailySpeak.module.css';
+import { playUISound } from '@/lib/uiSound';
 
 export default function DailySpeak({
   firstName,
@@ -63,7 +64,8 @@ export default function DailySpeak({
         throw new Error(payload.error || 'Could not save the challenge.');
       }
 
-      setMessage('Daily challenge complete.');
+      setMessage(payload.activity?.completed ? '🎉 Daily Speak complete!' : '✅ Daily challenge complete.');
+      playUISound(payload.activity?.completed ? 'complete' : 'success');
       router.refresh();
     } catch (error) {
       setMessage(error.message || 'Could not save the challenge.');
@@ -78,12 +80,17 @@ export default function DailySpeak({
     <div className={styles.wrap}>
       <header className={styles.hero}>
         <div>
-          <span className="eyebrow">DAILY SPEAK</span>
+          <span className="eyebrow">☀️ DAILY SPEAK</span>
           <h1>{missionComplete ? 'Daily mission complete.' : `Your English for today, ${firstName}.`}</h1>
           <p>
             One training session, three Power Phrases and one quick challenge.
             Keep the routine small enough to repeat every day.
           </p>
+          <div className="celebration-row">
+            <span>🎯 One focused session</span>
+            <span>✨ Three useful phrases</span>
+            <span>💬 One quick challenge</span>
+          </div>
         </div>
 
         <div className={styles.streak}>
@@ -106,7 +113,7 @@ export default function DailySpeak({
 
       <div className={styles.tasks}>
         <article className={`${styles.task} ${trainingDone ? styles.done : ''}`}>
-          <div className={styles.icon}>{trainingDone ? '✓' : '01'}</div>
+          <div className={styles.icon}>{trainingDone ? '✅' : '🎯'}</div>
           <div className={styles.copy}>
             <span>TRAIN</span>
             <h2>{trainingDone ? 'Training complete for today' : nextSessionTitle}</h2>
@@ -118,7 +125,7 @@ export default function DailySpeak({
         </article>
 
         <article className={`${styles.task} ${phraseCount >= 3 ? styles.done : ''}`}>
-          <div className={styles.icon}>{phraseCount >= 3 ? '✓' : '02'}</div>
+          <div className={styles.icon}>{phraseCount >= 3 ? '✅' : '✨'}</div>
           <div className={styles.copy}>
             <span>POWER PHRASES</span>
             <h2>{Math.min(phraseCount, 3)}/3 phrases practiced</h2>
@@ -132,7 +139,7 @@ export default function DailySpeak({
         </article>
 
         <article className={`${styles.task} ${challengeDone ? styles.done : ''}`}>
-          <div className={styles.icon}>{challengeDone ? '✓' : '03'}</div>
+          <div className={styles.icon}>{challengeDone ? '✅' : '💬'}</div>
           <div className={styles.copy}>
             <span>QUICK CHALLENGE</span>
             <h2>{challengeDone ? 'Challenge complete' : 'Think, say it, then write it.'}</h2>
@@ -159,7 +166,7 @@ export default function DailySpeak({
 
       <section className={`${styles.finish} ${missionComplete ? styles.finishDone : ''}`}>
         <div>
-          <span>{missionComplete ? '✓ DAILY SPEAK COMPLETE' : 'DAILY ROUTINE'}</span>
+          <span>{missionComplete ? '🎉 DAILY SPEAK COMPLETE' : '🌱 DAILY ROUTINE'}</span>
           <h2>{missionComplete ? 'Come back tomorrow.' : 'Finish all three to protect your streak.'}</h2>
           <p>
             The streak counts days where the full Daily Speak mission is completed.
