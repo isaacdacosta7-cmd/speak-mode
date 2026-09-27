@@ -1,5 +1,34 @@
-const phrases = ['What about you?', 'Let me think.', 'I understand.', 'Can you repeat that?', 'It depends.'];
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import PhraseTrainer from '@/components/PhraseTrainer';
 
-export default function PhrasesPage() {
-  return <div className="page-stack"><header className="page-header"><span className="eyebrow">POWER PHRASES</span><h1>Make useful English automatic.</h1><p>Every phrase returns until you can understand it and use it naturally.</p></header><div className="phrase-list">{phrases.map((phrase, i)=><article key={phrase} className="phrase-row"><span className="phrase-play">▶</span><div><strong>{phrase}</strong><small>{i < 2 ? 'Ready to review' : 'Learning'}</small></div><span className="phrase-score">{i < 2 ? '82%' : '46%'}</span></article>)}</div></div>;
+export const dynamic = 'force-dynamic';
+
+export default async function PhrasesPage() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+
+  if (error || !claims?.sub) {
+    redirect('/login?next=/phrases');
+  }
+
+  const [{ data: profile }, { data: progress }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('placement_mode')
+      .eq('id', claims.sub)
+      .maybeSingle(),
+    supabase
+      .from('phrase_progress')
+      .select('phrase_key, repetitions, progress_percent, last_practiced_at')
+      .eq('user_id', claims.sub),
+  ]);
+
+  return (
+    <PhraseTrainer
+      mode={profile?.placement_mode || 'START_MODE'}
+      initialProgress={progress || []}
+    />
+  );
 }
