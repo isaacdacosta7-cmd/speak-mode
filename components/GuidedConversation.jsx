@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './GuidedConversation.module.css';
 
+let localWhisperPromise = null;
+
 const scenarios = {
   START_MODE: {
     label: 'START MODE',
@@ -61,7 +63,6 @@ function say(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
   window.speechSynthesis.cancel();
-
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
   utterance.rate = 0.98;
@@ -105,6 +106,99 @@ function preferredMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
 }
 
+async function decodeAndResample(blob) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass || typeof OfflineAudioContext === 'undefined') {
+    throw new Error('This browser cannot prepare audio for local transcription.');
+  }
+
+  const context = new AudioContextClass();
+
+  try {
+    const buffer = await blob.arrayBuffer();
+    const decoded = await context.decodeAudioData(buffer.slice(0));
+    const targetRate = 16000;
+    const frameCount = Math.max(1, Math.ceil(decoded.duration * targetRate));
+    const offline = new OfflineAudioContext(1, frameCount, targetRate);
+    const source = offline.createBufferSource();
+
+    source.buffer = decoded;
+    source.connect(offline.destination);
+    source.start(0);
+
+    const rendered = await offline.startRendering();
+    return new Float32Array(rendered.getChannelData(0));
+  } finally {
+    try {
+      await context.close();
+    } catch {}
+  }
+}
+
+async function getLocalWhisper(onProgress) {
+  if (!localWhisperPromise) {
+    localWhisperPromise = (async () => {
+      const { pipeline, env } = await import('@huggingface/transformers');
+
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+
+      return pipeline(
+        'automatic-speech-recognition',
+        'Xenova/whisper-tiny.en',
+        {
+          progress_callback: (event) => {
+            if (typeof onProgress !== 'function') return;
+
+            if (event?.status === 'progress' && Number.isFinite(event.progress)) {
+              onProgress(Math.round(event.progress));
+            } else if (event?.status === 'ready') {
+              onProgress(100);
+            }
+          },
+        }
+      );
+    })().catch((error) => {
+      localWhisperPromise = null;
+      throw error;
+    });
+  }
+
+  return localWhisperPromise;
+}
+
+async function transcribeLocally(blob, setMessage) {
+  setMessage('Preparing local English transcription…');
+
+  const audio = await decodeAndResample(blob);
+
+  const transcriber = await getLocalWhisper((progress) => {
+    if (progress > 0 && progress < 100) {
+      setMessage(`Preparing local transcription model… ${progress}%`);
+    }
+  });
+
+  setMessage('Transcribing locally on this device…');
+
+  const output = await transcriber(audio, {
+    chunk_length_s: 30,
+    stride_length_s: 5,
+    language: 'english',
+    task: 'transcribe',
+  });
+
+  const text = Array.isArray(output)
+    ? output.map((item) => item?.text || '').join(' ').trim()
+    : output?.text?.trim();
+
+  if (!text) {
+    throw new Error('I could not detect enough English speech in that recording.');
+  }
+
+  return text;
+}
+
 export default function GuidedConversation({ fullName, mode }) {
   const router = useRouter();
   const scenario = scenarios[mode] || scenarios.START_MODE;
@@ -144,39 +238,67 @@ export default function GuidedConversation({ fullName, mode }) {
     };
   }, []);
 
+  async function tryServerTranscription(blob) {
+    if (sessionStorage.getItem('speakmode-local-transcription') === '1') {
+      return null;
+    }
+
+    const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+    const formData = new FormData();
+
+    formData.append(
+      'audio',
+      new File([blob], `speak-answer.${extension}`, {
+        type: blob.type || 'audio/webm',
+      })
+    );
+
+    const response = await fetch('/api/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 503 || response.status === 403) {
+        sessionStorage.setItem('speakmode-local-transcription', '1');
+        return null;
+      }
+
+      throw new Error(payload.error || 'Could not transcribe your answer.');
+    }
+
+    return payload.text?.trim() || null;
+  }
+
   async function transcribeRecording(blob, duration) {
     setTranscribing(true);
     setMicMessage('Transcribing your English…');
 
     try {
-      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
-      const formData = new FormData();
+      let text = null;
 
-      formData.append(
-        'audio',
-        new File([blob], `speak-answer.${extension}`, {
-          type: blob.type || 'audio/webm',
-        })
-      );
-
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Could not transcribe your answer.');
+      try {
+        text = await tryServerTranscription(blob);
+      } catch (serverError) {
+        console.warn('Server transcription unavailable:', serverError);
       }
 
-      setInput(payload.text);
+      if (!text) {
+        text = await transcribeLocally(blob, setMicMessage);
+      }
+
+      setInput(text);
       setSpeakingSeconds((value) => value + duration);
-      setMicMessage('Transcript ready. Review it, edit anything you want, then send your answer.');
+      setMicMessage(
+        'Transcript ready. Review it, edit anything you want, then send your answer.'
+      );
     } catch (error) {
+      console.error('Speak Mode local transcription failed', error);
       setMicMessage(
         error.message ||
-          'Automatic transcription was unavailable. Type your answer and continue.'
+          'I could not create a transcript. Try again with a shorter answer and speak close to the microphone.'
       );
     } finally {
       chunksRef.current = [];
@@ -192,7 +314,7 @@ export default function GuidedConversation({ fullName, mode }) {
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setMicMessage(
-        'Audio recording is unavailable in this browser. Type your answer and practice it out loud.'
+        'Audio recording is unavailable in this browser. Use a current version of Chrome, Edge, Safari, or Firefox.'
       );
       return;
     }
@@ -263,7 +385,7 @@ export default function GuidedConversation({ fullName, mode }) {
       streamRef.current = null;
       setRecording(false);
       setMicMessage(
-        'Microphone access was blocked. Allow microphone permission in your browser, or type your answer.'
+        'Microphone access was blocked. Allow microphone permission in your browser and try again.'
       );
     }
   }
@@ -357,8 +479,8 @@ export default function GuidedConversation({ fullName, mode }) {
         <span>{scenario.label} · GUIDED CONVERSATION</span>
         <h1>{scenario.title}</h1>
         <p>
-          Speak Mode records each answer only long enough to create the transcript.
-          The audio is discarded after transcription and is not stored in your account.
+          Speak naturally. Your recording is used only to create the transcript and is discarded immediately afterward.
+          The first local transcription on a device may take longer while the English model is prepared.
         </p>
       </header>
 
