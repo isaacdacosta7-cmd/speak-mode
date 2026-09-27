@@ -78,6 +78,7 @@ export default async function LivePage() {
         plan={resolvedPlan}
         used={used}
         sessions={allSessions}
+        subscriptionActive={profile?.subscription_status === 'active' || resolvedPlan.code === 'digital'}
       />
     </div>
   );
