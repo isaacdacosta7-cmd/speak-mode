@@ -29,6 +29,9 @@ function readableMode(mode) {
 export default function AppShell({ children, user }) {
   const mode = readableMode(user?.placementMode);
   const displayName = user?.fullName || user?.email?.split('@')[0] || 'Student';
+  const visibleNav = ['coach', 'admin'].includes(user?.role)
+    ? [...navItems, ['◇', 'Coach', '/coach/live']]
+    : navItems;
 
   return (
     <div className="app-shell">
@@ -36,7 +39,7 @@ export default function AppShell({ children, user }) {
         <Link href="/dashboard" className="sidebar-brand"><Brand /></Link>
 
         <nav className="sidebar-nav">
-          {navItems.map(([icon, label, href]) => (
+          {visibleNav.map(([icon, label, href]) => (
             <Link href={href} key={href} className="nav-link">
               <span className="nav-icon">{icon}</span>
               <span>{label}</span>
