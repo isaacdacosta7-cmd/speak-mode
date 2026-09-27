@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './GuidedConversation.module.css';
 
@@ -59,6 +59,7 @@ const scenarios = {
 
 function say(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
@@ -75,10 +76,32 @@ function say(text) {
 
 function feedbackFor(text, turn) {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length < 4) return 'Good start. Add one more detail so the other person has something to react to.';
-  if (turn === 3 && !text.includes('?')) return 'Strong answer. Add a question at the end to hand the conversation back naturally.';
-  if (words.length >= 18) return 'Nice expansion. Your answer gives the conversation room to continue.';
+
+  if (words.length < 4) {
+    return 'Good start. Add one more detail so the other person has something to react to.';
+  }
+
+  if (turn === 3 && !text.includes('?')) {
+    return 'Strong answer. Add a question at the end to hand the conversation back naturally.';
+  }
+
+  if (words.length >= 18) {
+    return 'Nice expansion. Your answer gives the conversation room to continue.';
+  }
+
   return 'Clear response. Keep the rhythm natural and say it once more out loud.';
+}
+
+function recognitionErrorMessage(code) {
+  const messages = {
+    'no-speech': 'I did not receive a transcript this time. Your audio recording is still available below.',
+    'audio-capture': 'The browser could not use speech recognition, but the audio recorder may still work.',
+    'not-allowed': 'Speech recognition permission was blocked. Your recorded audio can still be used when microphone access is allowed.',
+    network: 'Live transcription could not reach the browser speech service. Your audio is still being recorded.',
+    aborted: '',
+  };
+
+  return messages[code] || 'Automatic transcription stopped. Your audio recording is still available.';
 }
 
 export default function GuidedConversation({ fullName, mode }) {
@@ -90,72 +113,196 @@ export default function GuidedConversation({ fullName, mode }) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
   const [listening, setListening] = useState(false);
+  const [audioUrl, setAudioUrl] = useState('');
   const [micMessage, setMicMessage] = useState('');
   const [speakingSeconds, setSpeakingSeconds] = useState(0);
   const [finished, setFinished] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const recognitionRef = useRef(null);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
   const startedAtRef = useRef(null);
+  const createdUrlsRef = useRef([]);
+  const transcriptRef = useRef('');
 
   const prompt = scenario.prompts[turn];
 
-  function startMic() {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort?.();
+      } catch {}
 
-    if (!Recognition) {
-      setMicMessage('Voice recognition is unavailable in this browser. Type your answer and say it out loud before sending.');
+      if (recorderRef.current?.state === 'recording') {
+        try {
+          recorderRef.current.stop();
+        } catch {}
+      }
+
+      streamRef.current?.getTracks?.().forEach((track) => track.stop());
+      createdUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  async function startMic() {
+    if (listening) return;
+
+    setMicMessage('');
+    setAudioUrl('');
+    transcriptRef.current = '';
+    setInput('');
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setMicMessage('This browser cannot record audio here. You can still type your answer and say it out loud.');
       return;
     }
 
-    const recognition = new Recognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recognitionRef.current = recognition;
-    startedAtRef.current = Date.now();
-    setMicMessage('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      startedAtRef.current = Date.now();
 
-    recognition.onstart = () => setListening(true);
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
 
-    recognition.onresult = (event) => {
-      let transcript = '';
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        transcript += event.results[index][0].transcript;
-      }
-      setInput(transcript.trim());
-    };
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
 
-    recognition.onerror = () => {
-      setMicMessage('I could not capture that clearly. Try again or type your answer.');
-    };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        });
 
-    recognition.onend = () => {
-      setListening(false);
-      if (startedAtRef.current) {
-        const duration = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
+        const duration = Math.max(
+          1,
+          Math.round((Date.now() - startedAtRef.current) / 1000)
+        );
+
+        const url = URL.createObjectURL(blob);
+        createdUrlsRef.current.push(url);
+
+        setAudioUrl(url);
         setSpeakingSeconds((value) => value + duration);
-      }
-    };
+        setListening(false);
 
-    recognition.start();
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+
+        if (!transcriptRef.current.trim()) {
+          setMicMessage(
+            'Audio recorded successfully. Automatic transcription was unavailable for this answer, so you can replay the audio and continue with the voice answer.'
+          );
+        } else {
+          setMicMessage('Audio recorded and transcript captured.');
+        }
+      };
+
+      recorder.start();
+      setListening(true);
+      setMicMessage('Recording your answer… Speak naturally in English.');
+
+      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!Recognition) {
+        setMicMessage(
+          'Recording your answer… This browser does not provide live speech-to-text, so the audio will be saved for replay.'
+        );
+        return;
+      }
+
+      const recognition = new Recognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      recognition.maxAlternatives = 1;
+      recognitionRef.current = recognition;
+
+      recognition.onresult = (event) => {
+        let finalText = '';
+        let interimText = '';
+
+        for (let index = 0; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const text = result[0]?.transcript || '';
+
+          if (result.isFinal) {
+            finalText += `${text} `;
+          } else {
+            interimText += `${text} `;
+          }
+        }
+
+        const combined = `${finalText}${interimText}`.trim();
+        transcriptRef.current = combined;
+        setInput(combined);
+      };
+
+      recognition.onerror = (event) => {
+        const message = recognitionErrorMessage(event.error);
+        if (message) setMicMessage(message);
+      };
+
+      recognition.onend = () => {
+        recognitionRef.current = null;
+
+        if (recorderRef.current?.state === 'recording' && !transcriptRef.current.trim()) {
+          setMicMessage(
+            'Live transcription ended, but your audio is still recording. Press “Stop recording” when you finish.'
+          );
+        }
+      };
+
+      recognition.start();
+    } catch {
+      setListening(false);
+      streamRef.current?.getTracks?.().forEach((track) => track.stop());
+      streamRef.current = null;
+      setMicMessage(
+        'Microphone access was not available. Check the browser microphone permission, or type your answer and practice it out loud.'
+      );
+    }
   }
 
   function stopMic() {
-    recognitionRef.current?.stop();
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {}
+
+    recognitionRef.current = null;
+
+    if (recorderRef.current?.state === 'recording') {
+      recorderRef.current.stop();
+    }
   }
 
   async function submitAnswer() {
-    const answer = input.trim();
-    if (!answer) return;
+    if (listening) return;
+
+    const transcript = input.trim();
+    const hasVoice = Boolean(audioUrl);
+
+    if (!transcript && !hasVoice) return;
 
     const entry = {
       prompt,
-      answer,
-      feedback: feedbackFor(answer, turn),
+      answer: transcript || 'Voice answer recorded.',
+      audioUrl: hasVoice ? audioUrl : '',
+      feedback: transcript
+        ? feedbackFor(transcript, turn)
+        : 'Your voice answer was recorded. Replay it once and listen for clarity, rhythm, and whether you fully answered the prompt.',
     };
 
     setHistory((current) => [...current, entry]);
     setInput('');
+    setAudioUrl('');
+    setMicMessage('');
+    transcriptRef.current = '';
 
     if (turn < scenario.prompts.length - 1) {
       const nextTurn = turn + 1;
@@ -165,23 +312,41 @@ export default function GuidedConversation({ fullName, mode }) {
     }
 
     setSaving(true);
+
     try {
-      await fetch('/api/training-progress', {
+      const response = await fetch('/api/training-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          module_key: mode.toLowerCase(),
           session_key: 'speak-lab-01',
-          completion_percent: 100,
           speaking_seconds: speakingSeconds,
-          xp: 50,
         }),
       });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not save speaking progress.');
+      }
+
       setFinished(true);
       router.refresh();
+    } catch (error) {
+      setMicMessage(error.message || 'Could not save speaking progress.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function resetPractice() {
+    setTurn(0);
+    setInput('');
+    setHistory([]);
+    setAudioUrl('');
+    setMicMessage('');
+    setSpeakingSeconds(0);
+    setFinished(false);
+    transcriptRef.current = '';
   }
 
   if (finished) {
@@ -192,14 +357,10 @@ export default function GuidedConversation({ fullName, mode }) {
           <span>GUIDED CONVERSATION COMPLETE</span>
           <h1>Nice work, {firstName}.</h1>
           <p>You completed four conversation turns and earned +50 Speaking XP.</p>
+
           <div className={styles.completeActions}>
             <button onClick={() => router.push('/dashboard')}>Back to dashboard</button>
-            <button onClick={() => {
-              setTurn(0);
-              setHistory([]);
-              setFinished(false);
-              setSpeakingSeconds(0);
-            }}>Practice again</button>
+            <button onClick={resetPractice}>Practice again</button>
           </div>
         </section>
       </div>
@@ -211,11 +372,16 @@ export default function GuidedConversation({ fullName, mode }) {
       <header className={styles.header}>
         <span>{scenario.label} · GUIDED CONVERSATION</span>
         <h1>{scenario.title}</h1>
-        <p>Use the microphone when available. You can type as a fallback and still practice the answer out loud.</p>
+        <p>
+          Speak naturally. Speak Mode will try to transcribe your English while it also records the audio.
+          If live transcription fails, you can replay the recording and continue with the voice answer.
+        </p>
       </header>
 
       <section className={styles.room}>
-        <div className={styles.turnLabel}>TURN {turn + 1} / {scenario.prompts.length}</div>
+        <div className={styles.turnLabel}>
+          TURN {turn + 1} / {scenario.prompts.length}
+        </div>
 
         <div className={styles.coachBubble}>
           <div className={styles.coachAvatar}>SM</div>
@@ -230,18 +396,44 @@ export default function GuidedConversation({ fullName, mode }) {
           <textarea
             rows={5}
             value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Your answer will appear here…"
+            onChange={(event) => {
+              setInput(event.target.value);
+              transcriptRef.current = event.target.value;
+            }}
+            placeholder="Your transcript will appear here when speech-to-text is available. You can also type or edit it."
           />
+
+          {audioUrl ? (
+            <div className={styles.audioCard}>
+              <div>
+                <span>VOICE ANSWER RECORDED</span>
+                <small>Replay your answer before sending it.</small>
+              </div>
+              <audio controls src={audioUrl} />
+            </div>
+          ) : null}
 
           <div className={styles.controls}>
             {listening ? (
-              <button className={styles.stop} onClick={stopMic}>■ Stop listening</button>
+              <button className={styles.stop} onClick={stopMic}>
+                ■ Stop recording
+              </button>
             ) : (
-              <button className={styles.mic} onClick={startMic}>🎙 Speak answer</button>
+              <button className={styles.mic} onClick={startMic}>
+                🎙 Speak answer
+              </button>
             )}
-            <button className={styles.send} disabled={!input.trim() || saving} onClick={submitAnswer}>
-              {saving ? 'Saving…' : turn === scenario.prompts.length - 1 ? 'Finish conversation' : 'Send answer →'}
+
+            <button
+              className={styles.send}
+              disabled={listening || (!input.trim() && !audioUrl) || saving}
+              onClick={submitAnswer}
+            >
+              {saving
+                ? 'Saving…'
+                : turn === scenario.prompts.length - 1
+                  ? 'Finish conversation'
+                  : 'Send answer →'}
             </button>
           </div>
 
@@ -252,10 +444,14 @@ export default function GuidedConversation({ fullName, mode }) {
       {history.length ? (
         <section className={styles.history}>
           <span>YOUR CONVERSATION</span>
+
           {history.map((entry, index) => (
             <article key={index}>
               <small>{entry.prompt}</small>
               <strong>{entry.answer}</strong>
+              {entry.audioUrl ? (
+                <audio className={styles.historyAudio} controls src={entry.audioUrl} />
+              ) : null}
               <p>{entry.feedback}</p>
             </article>
           ))}
