@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import styles from './PhraseTrainer.module.css';
+import { playUISound } from '@/lib/uiSound';
 
 const libraries = {
   START_MODE: [
@@ -142,6 +143,12 @@ export default function PhraseTrainer({ mode, initialProgress }) {
         ...current,
         [key]: payload.progress,
       }));
+
+      const reachedMastery =
+        (previous.progress_percent || 0) < 100 &&
+        (payload.progress?.progress_percent || 0) >= 100;
+
+      playUISound(reachedMastery || reviewStatus(previous).due ? 'complete' : 'success');
     } catch (error) {
       setProgress((current) => ({
         ...current,
@@ -156,7 +163,7 @@ export default function PhraseTrainer({ mode, initialProgress }) {
   return (
     <div className="page-stack">
       <header className="page-header">
-        <span className="eyebrow">POWER PHRASES</span>
+        <span className="eyebrow">✨ POWER PHRASES</span>
         <h1>Make useful English automatic.</h1>
         <p>Listen, repeat and revisit phrases when Speak Mode brings them back for review.</p>
       </header>
@@ -187,7 +194,7 @@ export default function PhraseTrainer({ mode, initialProgress }) {
               </button>
 
               <div className={styles.copy}>
-                <strong>{phrase}</strong>
+                <strong>{percent >= 100 ? '🌟 ' : ''}{phrase}</strong>
                 <small>{meaning}</small>
                 <em className={review.due ? styles.due : ''}>{review.label}</em>
                 <div className={styles.track}>
@@ -220,7 +227,7 @@ export default function PhraseTrainer({ mode, initialProgress }) {
       </div>
 
       <section className="panel-card accent-panel">
-        <span className="tiny-label">SPACED REVIEW</span>
+        <span className="tiny-label">🧠 SPACED REVIEW</span>
         <h3>Learn it five times, then Speak Mode brings it back.</h3>
         <p>
           Initial practice builds from 20% to 100%. After mastery, reviews are scheduled
