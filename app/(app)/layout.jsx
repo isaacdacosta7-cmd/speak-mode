@@ -15,7 +15,7 @@ export default async function TrainingLayout({ children }) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, placement_score, placement_mode')
+    .select('full_name, placement_score, placement_mode, role')
     .eq('id', claims.sub)
     .maybeSingle();
 
@@ -25,6 +25,7 @@ export default async function TrainingLayout({ children }) {
     fullName: profile?.full_name || claims.user_metadata?.full_name || '',
     placementScore: profile?.placement_score ?? null,
     placementMode: profile?.placement_mode ?? null,
+    role: profile?.role || 'student',
   };
 
   return <AppShell user={user}>{children}</AppShell>;
