@@ -299,3 +299,68 @@ using ((select auth.uid()) = user_id);
 
 -- Write access for placement, training, phrase practice, and live coaching
 -- is intentionally handled through authenticated SECURITY DEFINER RPCs.
+
+-- save_training_progress uses the named unique constraint to avoid PL/pgSQL
+-- ambiguity with the returned session_key column.
+create or replace function public.save_training_progress(
+  p_module_key text,
+  p_session_key text,
+  p_completion_percent integer,
+  p_speaking_seconds integer,
+  p_xp integer
+)
+returns table (
+  session_key text,
+  completion_percent integer,
+  speaking_seconds integer,
+  xp integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  insert into public.training_progress as tp (
+    user_id,
+    module_key,
+    session_key,
+    completion_percent,
+    speaking_seconds,
+    xp,
+    last_activity_at
+  )
+  values (
+    v_user_id,
+    p_module_key,
+    p_session_key,
+    p_completion_percent,
+    p_speaking_seconds,
+    p_xp,
+    now()
+  )
+  on conflict on constraint training_progress_user_id_session_key_key
+  do update set
+    completion_percent = greatest(tp.completion_percent, excluded.completion_percent),
+    speaking_seconds = greatest(tp.speaking_seconds, excluded.speaking_seconds),
+    xp = greatest(tp.xp, excluded.xp),
+    last_activity_at = now();
+
+  return query
+  select
+    saved.session_key,
+    saved.completion_percent,
+    saved.speaking_seconds,
+    saved.xp
+  from public.training_progress saved
+  where saved.user_id = v_user_id
+    and saved.session_key = p_session_key;
+end;
+$$;

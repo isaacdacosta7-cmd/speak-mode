@@ -61,6 +61,7 @@ function say(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
   window.speechSynthesis.cancel();
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
   utterance.rate = 0.98;
@@ -92,16 +93,16 @@ function feedbackFor(text, turn) {
   return 'Clear response. Keep the rhythm natural and say it once more out loud.';
 }
 
-function recognitionErrorMessage(code) {
-  const messages = {
-    'no-speech': 'I did not receive a transcript this time. Your audio recording is still available below.',
-    'audio-capture': 'The browser could not use speech recognition, but the audio recorder may still work.',
-    'not-allowed': 'Speech recognition permission was blocked. Your recorded audio can still be used when microphone access is allowed.',
-    network: 'Live transcription could not reach the browser speech service. Your audio is still being recorded.',
-    aborted: '',
-  };
+function preferredMimeType() {
+  if (typeof MediaRecorder === 'undefined') return '';
 
-  return messages[code] || 'Automatic transcription stopped. Your audio recording is still available.';
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+  ];
+
+  return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
 }
 
 export default function GuidedConversation({ fullName, mode }) {
@@ -112,28 +113,26 @@ export default function GuidedConversation({ fullName, mode }) {
   const [turn, setTurn] = useState(0);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
-  const [listening, setListening] = useState(false);
-  const [audioUrl, setAudioUrl] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [micMessage, setMicMessage] = useState('');
   const [speakingSeconds, setSpeakingSeconds] = useState(0);
   const [finished, setFinished] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const recognitionRef = useRef(null);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const startedAtRef = useRef(null);
-  const createdUrlsRef = useRef([]);
-  const transcriptRef = useRef('');
+  const autoStopRef = useRef(null);
 
   const prompt = scenario.prompts[turn];
 
   useEffect(() => {
     return () => {
-      try {
-        recognitionRef.current?.abort?.();
-      } catch {}
+      if (autoStopRef.current) {
+        window.clearTimeout(autoStopRef.current);
+      }
 
       if (recorderRef.current?.state === 'recording') {
         try {
@@ -142,30 +141,74 @@ export default function GuidedConversation({ fullName, mode }) {
       }
 
       streamRef.current?.getTracks?.().forEach((track) => track.stop());
-      createdUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
-  async function startMic() {
-    if (listening) return;
+  async function transcribeRecording(blob, duration) {
+    setTranscribing(true);
+    setMicMessage('Transcribing your English…');
+
+    try {
+      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+      const formData = new FormData();
+
+      formData.append(
+        'audio',
+        new File([blob], `speak-answer.${extension}`, {
+          type: blob.type || 'audio/webm',
+        })
+      );
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not transcribe your answer.');
+      }
+
+      setInput(payload.text);
+      setSpeakingSeconds((value) => value + duration);
+      setMicMessage('Transcript ready. Review it, edit anything you want, then send your answer.');
+    } catch (error) {
+      setMicMessage(
+        error.message ||
+          'Automatic transcription was unavailable. Type your answer and continue.'
+      );
+    } finally {
+      chunksRef.current = [];
+      setTranscribing(false);
+    }
+  }
+
+  async function startRecording() {
+    if (recording || transcribing) return;
 
     setMicMessage('');
-    setAudioUrl('');
-    transcriptRef.current = '';
     setInput('');
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setMicMessage('This browser cannot record audio here. You can still type your answer and say it out loud.');
+      setMicMessage(
+        'Audio recording is unavailable in this browser. Type your answer and practice it out loud.'
+      );
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = preferredMimeType();
+
       streamRef.current = stream;
       chunksRef.current = [];
       startedAtRef.current = Date.now();
 
-      const recorder = new MediaRecorder(stream);
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
@@ -174,135 +217,78 @@ export default function GuidedConversation({ fullName, mode }) {
         }
       };
 
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
-        });
+      recorder.onerror = () => {
+        setMicMessage('The browser could not complete the recording. Please try again.');
+      };
+
+      recorder.onstop = async () => {
+        if (autoStopRef.current) {
+          window.clearTimeout(autoStopRef.current);
+          autoStopRef.current = null;
+        }
 
         const duration = Math.max(
           1,
           Math.round((Date.now() - startedAtRef.current) / 1000)
         );
 
-        const url = URL.createObjectURL(blob);
-        createdUrlsRef.current.push(url);
-
-        setAudioUrl(url);
-        setSpeakingSeconds((value) => value + duration);
-        setListening(false);
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        });
 
         stream.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
+        setRecording(false);
 
-        if (!transcriptRef.current.trim()) {
-          setMicMessage(
-            'Audio recorded successfully. Automatic transcription was unavailable for this answer, so you can replay the audio and continue with the voice answer.'
-          );
-        } else {
-          setMicMessage('Audio recorded and transcript captured.');
-        }
-      };
-
-      recorder.start();
-      setListening(true);
-      setMicMessage('Recording your answer… Speak naturally in English.');
-
-      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-      if (!Recognition) {
-        setMicMessage(
-          'Recording your answer… This browser does not provide live speech-to-text, so the audio will be saved for replay.'
-        );
-        return;
-      }
-
-      const recognition = new Recognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = true;
-      recognition.continuous = true;
-      recognition.maxAlternatives = 1;
-      recognitionRef.current = recognition;
-
-      recognition.onresult = (event) => {
-        let finalText = '';
-        let interimText = '';
-
-        for (let index = 0; index < event.results.length; index += 1) {
-          const result = event.results[index];
-          const text = result[0]?.transcript || '';
-
-          if (result.isFinal) {
-            finalText += `${text} `;
-          } else {
-            interimText += `${text} `;
-          }
+        if (blob.size < 200) {
+          chunksRef.current = [];
+          setMicMessage('The recording was too short. Try again and speak for a little longer.');
+          return;
         }
 
-        const combined = `${finalText}${interimText}`.trim();
-        transcriptRef.current = combined;
-        setInput(combined);
+        await transcribeRecording(blob, duration);
       };
 
-      recognition.onerror = (event) => {
-        const message = recognitionErrorMessage(event.error);
-        if (message) setMicMessage(message);
-      };
+      recorder.start(250);
+      setRecording(true);
+      setMicMessage('Recording… Speak naturally in English, then press Stop recording.');
 
-      recognition.onend = () => {
-        recognitionRef.current = null;
-
-        if (recorderRef.current?.state === 'recording' && !transcriptRef.current.trim()) {
-          setMicMessage(
-            'Live transcription ended, but your audio is still recording. Press “Stop recording” when you finish.'
-          );
+      autoStopRef.current = window.setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop();
         }
-      };
-
-      recognition.start();
+      }, 90000);
     } catch {
-      setListening(false);
       streamRef.current?.getTracks?.().forEach((track) => track.stop());
       streamRef.current = null;
+      setRecording(false);
       setMicMessage(
-        'Microphone access was not available. Check the browser microphone permission, or type your answer and practice it out loud.'
+        'Microphone access was blocked. Allow microphone permission in your browser, or type your answer.'
       );
     }
   }
 
-  function stopMic() {
-    try {
-      recognitionRef.current?.stop?.();
-    } catch {}
-
-    recognitionRef.current = null;
-
+  function stopRecording() {
     if (recorderRef.current?.state === 'recording') {
       recorderRef.current.stop();
     }
   }
 
   async function submitAnswer() {
-    if (listening) return;
+    if (recording || transcribing) return;
 
-    const transcript = input.trim();
-    const hasVoice = Boolean(audioUrl);
-
-    if (!transcript && !hasVoice) return;
+    const answer = input.trim();
+    if (!answer) return;
 
     const entry = {
       prompt,
-      answer: transcript || 'Voice answer recorded.',
-      audioUrl: hasVoice ? audioUrl : '',
-      feedback: transcript
-        ? feedbackFor(transcript, turn)
-        : 'Your voice answer was recorded. Replay it once and listen for clarity, rhythm, and whether you fully answered the prompt.',
+      answer,
+      feedback: feedbackFor(answer, turn),
     };
 
     setHistory((current) => [...current, entry]);
     setInput('');
-    setAudioUrl('');
     setMicMessage('');
-    transcriptRef.current = '';
 
     if (turn < scenario.prompts.length - 1) {
       const nextTurn = turn + 1;
@@ -342,11 +328,9 @@ export default function GuidedConversation({ fullName, mode }) {
     setTurn(0);
     setInput('');
     setHistory([]);
-    setAudioUrl('');
     setMicMessage('');
     setSpeakingSeconds(0);
     setFinished(false);
-    transcriptRef.current = '';
   }
 
   if (finished) {
@@ -373,8 +357,8 @@ export default function GuidedConversation({ fullName, mode }) {
         <span>{scenario.label} · GUIDED CONVERSATION</span>
         <h1>{scenario.title}</h1>
         <p>
-          Speak naturally. Speak Mode will try to transcribe your English while it also records the audio.
-          If live transcription fails, you can replay the recording and continue with the voice answer.
+          Speak Mode records each answer only long enough to create the transcript.
+          The audio is discarded after transcription and is not stored in your account.
         </p>
       </header>
 
@@ -396,37 +380,33 @@ export default function GuidedConversation({ fullName, mode }) {
           <textarea
             rows={5}
             value={input}
-            onChange={(event) => {
-              setInput(event.target.value);
-              transcriptRef.current = event.target.value;
-            }}
-            placeholder="Your transcript will appear here when speech-to-text is available. You can also type or edit it."
+            onChange={(event) => setInput(event.target.value)}
+            disabled={recording || transcribing}
+            placeholder={
+              transcribing
+                ? 'Transcribing your English…'
+                : 'Your transcript will appear here after you finish speaking. You can edit it before sending.'
+            }
           />
 
-          {audioUrl ? (
-            <div className={styles.audioCard}>
-              <div>
-                <span>VOICE ANSWER RECORDED</span>
-                <small>Replay your answer before sending it.</small>
-              </div>
-              <audio controls src={audioUrl} />
-            </div>
-          ) : null}
-
           <div className={styles.controls}>
-            {listening ? (
-              <button className={styles.stop} onClick={stopMic}>
+            {recording ? (
+              <button className={styles.stop} onClick={stopRecording}>
                 ■ Stop recording
               </button>
             ) : (
-              <button className={styles.mic} onClick={startMic}>
-                🎙 Speak answer
+              <button
+                className={styles.mic}
+                onClick={startRecording}
+                disabled={transcribing}
+              >
+                {transcribing ? '⏳ Transcribing…' : '🎙 Speak answer'}
               </button>
             )}
 
             <button
               className={styles.send}
-              disabled={listening || (!input.trim() && !audioUrl) || saving}
+              disabled={recording || transcribing || !input.trim() || saving}
               onClick={submitAnswer}
             >
               {saving
@@ -449,9 +429,6 @@ export default function GuidedConversation({ fullName, mode }) {
             <article key={index}>
               <small>{entry.prompt}</small>
               <strong>{entry.answer}</strong>
-              {entry.audioUrl ? (
-                <audio className={styles.historyAudio} controls src={entry.audioUrl} />
-              ) : null}
               <p>{entry.feedback}</p>
             </article>
           ))}
