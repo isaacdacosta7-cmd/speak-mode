@@ -42,3 +42,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 - Supabase region: `us-west-2`
 
 <!-- deploy-sync: 2026-09-26 -->
+
+
+### Correction + cartoon release check
+
+Release candidate prepared for final beta verification on 2026-09-28.
