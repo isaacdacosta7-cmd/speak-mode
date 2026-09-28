@@ -5,6 +5,7 @@ const root = process.cwd();
 const corePath = path.join(root, 'lib', 'correction.js');
 const serverPath = path.join(root, 'lib', 'serverCorrection.js');
 const dictionaryPath = path.join(root, 'public', 'data', 'en.dic');
+const phraseTrainerPath = path.join(root, 'components', 'PhraseTrainer.jsx');
 
 let coreSource = fs.readFileSync(corePath, 'utf8')
   .replace(/export const /g, 'const ')
@@ -97,6 +98,53 @@ for (const [input, options] of mustPass) {
   }
 }
 
+const phraseSource = fs.readFileSync(phraseTrainerPath, 'utf8');
+const phrasePattern = /\[\s*['"]([^'"]+)['"]\s*,\s*(['"])(.*?)\2\s*,\s*(['"])/g;
+const phraseMap = new Map();
+let phraseMatch;
+
+while ((phraseMatch = phrasePattern.exec(phraseSource))) {
+  if (/^(start|response|conversation|fluency|native)-/.test(phraseMatch[1])) {
+    phraseMap.set(phraseMatch[1], phraseMatch[3]);
+  }
+}
+
+function makeTypo(text) {
+  const matches = [...text.matchAll(/[A-Za-z]{2,}/g)];
+  const target = matches.find((match) => match[0].toLowerCase() !== 'i') || matches[0];
+
+  if (!target) return `x ${text}`;
+
+  const word = target[0];
+  const removeAt = word.length > 2 ? 1 : 0;
+  const misspelled = word.slice(0, removeAt) + word.slice(removeAt + 1);
+
+  return text.slice(0, target.index) + misspelled + text.slice(target.index + word.length);
+}
+
+for (const [phraseKey, phrase] of phraseMap.entries()) {
+  const correct = server.correctEnglishAnswer(phrase, {
+    type: 'phrase',
+    targetText: phrase,
+  });
+
+  if (!correct.canContinue) {
+    failures.push(
+      `Correct Power Phrase failed (${phraseKey}): ${correct.corrections.join(' | ')}`
+    );
+  }
+
+  const typo = makeTypo(phrase);
+  const incorrect = server.correctEnglishAnswer(typo, {
+    type: 'phrase',
+    targetText: phrase,
+  });
+
+  if (incorrect.canContinue) {
+    failures.push(`Misspelled Power Phrase was accepted (${phraseKey}): ${typo}`);
+  }
+}
+
 for (const [sessionKey, guide] of Object.entries(core.CORRECTION_GUIDES)) {
   for (const type of ['build', 'answer']) {
     const input = type === 'build' ? guide.buildModel : guide.answerModel;
@@ -117,5 +165,5 @@ if (failures.length) {
 }
 
 console.log(
-  `Correction regression tests passed: ${mustFail.length} invalid cases rejected, ${mustPass.length} valid cases accepted, 50 model answers accepted.`
+  `Correction regression tests passed: ${mustFail.length} invalid cases rejected, ${mustPass.length} valid cases accepted, 50 model answers accepted, ${phraseMap.size} Power Phrases validated and ${phraseMap.size} misspelled phrase variants rejected.`
 );
