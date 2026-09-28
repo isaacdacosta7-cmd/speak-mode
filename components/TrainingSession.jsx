@@ -81,8 +81,10 @@ export default function TrainingSession({
   const [buildAnswer, setBuildAnswer] = useState('');
   const [buildFeedback, setBuildFeedback] = useState(null);
   const [checkingBuild, setCheckingBuild] = useState(false);
+  const [checkingBuild, setCheckingBuild] = useState(false);
   const [quickAnswer, setQuickAnswer] = useState('');
   const [quickFeedback, setQuickFeedback] = useState(null);
+  const [checkingQuick, setCheckingQuick] = useState(false);
   const [checkingQuick, setCheckingQuick] = useState(false);
   const [checkError, setCheckError] = useState('');
   const [roleChoice, setRoleChoice] = useState(null);
