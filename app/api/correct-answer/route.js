@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { correctEnglishAnswer } from '@/lib/serverCorrection';
+import { correctEnglishAnswerFull } from '@/lib/serverCorrection';
 
 export const runtime = 'nodejs';
 
@@ -39,7 +39,7 @@ export async function POST(request) {
     );
   }
 
-  const result = correctEnglishAnswer(text, {
+  const result = await correctEnglishAnswerFull(text, {
     sessionKey,
     type,
     targetText,
