@@ -1,55 +1,61 @@
 import Link from 'next/link';
+import SpeakBuddy from '@/components/SpeakBuddy';
 
 export const dynamic = 'force-dynamic';
 
 export default function SpeakPage() {
   return (
     <div className="page-stack">
-      <header className="page-header">
-        <span className="eyebrow">VOICE CONVERSATION · BETA</span>
-        <h1>Voice Conversation is being upgraded.</h1>
-        <p>
-          This area will reopen when the production speech-to-text service is connected.
-          The beta currently focuses on structured conversation training, Daily Speak,
-          Power Phrases and human Live sessions.
-        </p>
+      <header className="page-header cartoon-hero">
+        <div>
+          <span className="eyebrow">🔒 SPEAKING · VOICE CONVERSATION</span>
+          <h1>Muy pronto se libera.</h1>
+          <p>
+            This is where Speak Mode will turn into a real voice conversation experience.
+            We are connecting the production speech system before opening it to beta testers.
+          </p>
+          <span className="locked-badge">🔒 COMING SOON</span>
+        </div>
+        <SpeakBuddy variant="locked" />
       </header>
 
       <section className="continue-card">
         <div className="continue-top">
           <div>
-            <span className="tiny-label">AVAILABLE NOW</span>
-            <h2>Keep training your conversational English.</h2>
-            <p>Use the active parts of Speak Mode while voice transcription is in standby.</p>
+            <span className="tiny-label">NEXT SPEAK MODE RELEASE</span>
+            <h2>Talk, get transcribed and receive correction.</h2>
+            <p>
+              The final flow will listen to your English, convert it to text, correct your answer and keep the conversation moving.
+            </p>
           </div>
-          <div className="progress-orb"><strong>β</strong><span>voice</span></div>
+          <div className="progress-orb"><strong>🎙</strong><span>voice</span></div>
         </div>
 
         <div className="session-meta">
-          <span>☀ Daily Speak</span>
-          <span>▶ Structured Train</span>
-          <span>✦ Power Phrases</span>
-          <span>◉ Human Live</span>
+          <span>🎙 Voice</span>
+          <span>📝 Transcript</span>
+          <span>✅ Correction</span>
+          <span>💬 Conversation</span>
         </div>
 
-        <Link href="/daily" className="button button-primary">
-          Open Daily Speak →
+        <Link href="/train" className="button button-primary">
+          Train with corrections now →
         </Link>
       </section>
 
       <section className="split-grid">
         <article className="panel-card">
-          <span className="tiny-label">TRAIN</span>
-          <h3>Continue your level path.</h3>
-          <p>Complete the five structured sessions assigned to your current Speak Mode.</p>
-          <Link href="/train" className="text-link">Open Train →</Link>
+          <span className="tiny-label">🎯 TRAIN</span>
+          <h3>Practice with correction now.</h3>
+          <p>Build and Answer activities now tell you what is correct, what needs fixing and how to improve it.</p>
+          <Link href="/train" className="text-link">Open corrected training →</Link>
         </article>
 
         <article className="panel-card accent-panel">
-          <span className="tiny-label">LIVE</span>
-          <h3>Practice with a real person.</h3>
-          <p>Eligible plans can request human conversation sessions with a coach.</p>
-          <Link href="/live" className="text-link">Open Live →</Link>
+          <span className="tiny-label">✨ POWER PHRASES</span>
+          <h3>Build the language you will use in Speaking.</h3>
+          <p>Your expanded phrase library prepares the expressions that will later become automatic in voice conversation.</p>
+          <Link href="/phrases" className="text-link">Open phrases →</Link>
         </article>
       </section>
     </div>

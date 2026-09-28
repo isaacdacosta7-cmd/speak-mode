@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Brand from '@/components/Brand';
+import SpeakBuddy from '@/components/SpeakBuddy';
 
 export default function HomePage() {
   return (
@@ -8,10 +9,16 @@ export default function HomePage() {
       <div className="ambient ambient-b" />
 
       <section className="welcome-card">
-        <Brand size="large" />
+        <div className="cartoon-hero">
+          <div>
+            <Brand size="large" />
 
-        <span className="eyebrow">✨ PRIVATE BETA · CONVERSATIONAL ENGLISH</span>
-        <h1>Turn English into a reflex.</h1>
+            <span className="eyebrow">✨ PRIVATE BETA · CONVERSATIONAL ENGLISH</span>
+            <h1>Turn English into a reflex.</h1>
+          </div>
+
+          <SpeakBuddy variant="phrases" />
+        </div>
 
         <p>
           Speak Mode trains useful English through short daily practice, repetition,
@@ -46,7 +53,7 @@ export default function HomePage() {
         </div>
 
         <small className="beta-note">
-          Private beta · Voice Conversation is being prepared for the production speech integration.
+          Private beta · Speaking and Live remain locked until the production conversation plan is released.
         </small>
       </section>
     </main>

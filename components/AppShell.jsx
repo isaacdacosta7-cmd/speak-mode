@@ -9,7 +9,8 @@ const navItems = [
   ['☀️', 'Daily', '/daily'],
   ['🎯', 'Train', '/train'],
   ['✨', 'Phrases', '/phrases'],
-  ['👥', 'Live', '/live'],
+  ['🔒', 'Speaking', '/speak'],
+  ['🔒', 'Live', '/live'],
   ['👤', 'Profile', '/profile'],
 ];
 

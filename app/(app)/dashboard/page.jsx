@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getModeSessions } from '@/lib/curriculum';
 import BetaOnboarding from '@/components/BetaOnboarding';
+import SpeakBuddy from '@/components/SpeakBuddy';
 
 function titleCaseMode(mode) {
   return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
@@ -62,7 +63,7 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from('training_progress')
-      .select('session_key, completion_percent, speaking_seconds, xp')
+      .select('session_key, completion_percent, xp')
       .eq('user_id', claims.sub),
     supabase
       .from('daily_activity')
@@ -79,8 +80,6 @@ export default async function DashboardPage() {
 
   const progress = progressRows || [];
   const xp = progress.reduce((total, row) => total + (row.xp || 0), 0);
-  const speakingSeconds = progress.reduce((total, row) => total + (row.speaking_seconds || 0), 0);
-  const speakingMinutes = Math.floor(speakingSeconds / 60);
   const completedActivities = progress.filter((row) => row.completion_percent >= 100).length;
 
   const mode = titleCaseMode(profile?.placement_mode);
@@ -124,148 +123,156 @@ export default async function DashboardPage() {
       ) : null}
 
       <div className="dashboard-stack">
-      <section className="hero-training">
-        <div>
-          <span className="eyebrow">WELCOME, {firstName.toUpperCase()}</span>
-          <h1>Ready for today’s English?</h1>
-          <p>
-            {needsPlacement
-              ? 'Your account is active. Complete the placement test to unlock your personalized conversation path.'
-              : todayComplete
-                ? `Daily Speak is complete. Your ${mode} training path is still available for extra practice.`
-                : `Your Daily Speak routine is waiting. You are currently training in ${mode}.`}
-          </p>
-        </div>
-
-        <div className="streak-pill">
-          <span>🔥</span>
-          <strong>{streak}</strong>
-          <small>day streak</small>
-        </div>
-      </section>
-
-      <section className="continue-card">
-        <div className="continue-top">
+        <section className="hero-training cartoon-hero">
           <div>
-            <span className="tiny-label">
-              {needsPlacement
-                ? 'YOUR NEXT STEP'
-                : blockComplete
-                  ? 'BLOCK 01 COMPLETE'
-                  : `CONTINUE · SESSION ${String(activeIndex + 1).padStart(2, '0')} OF ${String(sessions.length).padStart(2, '0')}`}
-            </span>
-
-            <h2>
-              {needsPlacement
-                ? 'Take your 15-minute placement test'
-                : activeSession?.title}
-            </h2>
-
+            <span className="eyebrow">✨ WELCOME, {firstName.toUpperCase()}</span>
+            <h1>Ready for today’s English?</h1>
             <p>
               {needsPlacement
-                ? 'Listening · Reaction · Real English · Writing · 100 points'
-                : activeSession?.subtitle}
+                ? 'Complete the placement test to unlock your personalized conversation path.'
+                : todayComplete
+                  ? `Daily Speak is complete. Your ${mode} training path is still available for extra practice.`
+                  : `Your Daily Speak routine is waiting. You are currently training in ${mode}.`}
             </p>
+            <div className="celebration-row">
+              <span>🔥 {streak} day streak</span>
+              <span>⚡ {xp} Training XP</span>
+              <span>✅ {completedActivities} activities</span>
+            </div>
           </div>
 
-          <div className="progress-orb">
-            <strong>{needsPlacement ? '0%' : blockComplete ? '100%' : `${activeProgress}%`}</strong>
-            <span>{needsPlacement ? 'ready' : blockComplete ? 'block' : 'session'}</span>
+          <SpeakBuddy variant={todayComplete ? 'celebrate' : 'study'} />
+        </section>
+
+        <section className="continue-card">
+          <div className="continue-top">
+            <div>
+              <span className="tiny-label">
+                {needsPlacement
+                  ? 'YOUR NEXT STEP'
+                  : blockComplete
+                    ? 'BLOCK 01 COMPLETE'
+                    : `CONTINUE · SESSION ${String(activeIndex + 1).padStart(2, '0')} OF ${String(sessions.length).padStart(2, '0')}`}
+              </span>
+
+              <h2>
+                {needsPlacement
+                  ? 'Take your 15-minute placement test'
+                  : activeSession?.title}
+              </h2>
+
+              <p>
+                {needsPlacement
+                  ? 'Listening · Reaction · Real English · Writing · 100 points'
+                  : activeSession?.subtitle}
+              </p>
+            </div>
+
+            <div className="progress-orb">
+              <strong>{needsPlacement ? '0%' : blockComplete ? '100%' : `${activeProgress}%`}</strong>
+              <span>{needsPlacement ? 'ready' : blockComplete ? 'block' : 'session'}</span>
+            </div>
           </div>
-        </div>
 
-        <div className="progress-track">
-          <span style={{ width: needsPlacement ? '0%' : `${blockPercent}%` }} />
-        </div>
+          <div className="progress-track">
+            <span style={{ width: needsPlacement ? '0%' : `${blockPercent}%` }} />
+          </div>
 
-        <div className="session-meta">
-          {needsPlacement ? (
-            <>
-              <span>🎧 Listening</span>
-              <span>⚡ Reaction</span>
-              <span>💬 Real English</span>
-              <span>✍️ Writing</span>
-            </>
-          ) : (
-            <>
-              <span>🎧 Hear</span>
-              <span>🗣 Copy</span>
-              <span>✍️ Build</span>
-              <span>⚡ Answer</span>
-              <span>💬 Use</span>
-              <span>🎙 Speak</span>
-            </>
-          )}
-        </div>
+          <div className="session-meta">
+            {needsPlacement ? (
+              <>
+                <span>🎧 Listening</span>
+                <span>⚡ Reaction</span>
+                <span>💬 Real English</span>
+                <span>✍️ Writing</span>
+              </>
+            ) : (
+              <>
+                <span>🎧 Hear</span>
+                <span>🗣 Copy</span>
+                <span>🧩 Build + correction</span>
+                <span>⚡ Answer + correction</span>
+                <span>💬 Use</span>
+                <span>🔒 Speaking soon</span>
+              </>
+            )}
+          </div>
 
-        <Link
-          href={
-            needsPlacement
-              ? '/placement-test'
-              : blockComplete
-                ? '/train'
-                : `/train/${activeSession.key}`
-          }
-          className="button button-primary"
-        >
-          {needsPlacement
-            ? 'Start placement test →'
-            : blockComplete
-              ? 'Review completed block →'
-              : 'Continue training →'}
-        </Link>
-      </section>
-
-      <section className="dashboard-grid">
-        <article className="metric-card">
-          <span className="metric-icon">🔥</span>
-          <strong>{streak}</strong>
-          <small>Daily Speak Streak</small>
-          <em>{todayComplete ? 'Today is complete' : 'Finish Daily Speak to extend it'}</em>
-        </article>
-
-        <article className="metric-card">
-          <span className="metric-icon">⚡</span>
-          <strong>{xp}</strong>
-          <small>Speaking XP</small>
-          <em>{completedActivities} completed activities</em>
-        </article>
-
-        <article className="metric-card">
-          <span className="metric-icon">🎙</span>
-          <strong>{speakingMinutes}m</strong>
-          <small>Speaking Time</small>
-          <em>Daily goal: {profile?.daily_goal_minutes || 20} min</em>
-        </article>
-      </section>
-
-      <section className="split-grid">
-        <article className="panel-card accent-panel">
-          <span className="tiny-label">DAILY SPEAK</span>
-          <h3>{todayComplete ? 'Today’s mission is complete.' : 'Your three-part daily routine is ready.'}</h3>
-          <p>Train once, practice three Power Phrases and complete one quick English challenge.</p>
-          <Link href="/daily" className="text-link">Open Daily Speak →</Link>
-        </article>
-
-        <article className="panel-card">
-          <span className="tiny-label">CURRENT MODE</span>
-          <h3>{mode}</h3>
-          <p>
+          <Link
+            href={
+              needsPlacement
+                ? '/placement-test'
+                : blockComplete
+                  ? '/train'
+                  : `/train/${activeSession.key}`
+            }
+            className="button button-primary"
+          >
             {needsPlacement
-              ? 'Your placement result will appear here immediately after the test.'
-              : `Placement score: ${profile.placement_score}/100 · Block 01: ${blockPercent}% complete.`}
-          </p>
-          <Link href={needsPlacement ? '/placement-test' : '/placement-result'} className="text-link">
-            {needsPlacement ? 'Take placement test →' : 'View placement result →'}
+              ? 'Start placement test →'
+              : blockComplete
+                ? 'Review completed block →'
+                : 'Continue corrected training →'}
           </Link>
-        </article>
-      </section>
+        </section>
 
-      <section className="panel-card">
-        <span className="tiny-label">VOICE CONVERSATION</span>
-        <h3>Voice Conversation is temporarily held for the beta infrastructure upgrade.</h3>
-        <p>Structured training, Daily Speak, Power Phrases and Live human sessions remain active while the production speech service is integrated.</p>
-      </section>
+        <section className="dashboard-grid">
+          <article className="metric-card">
+            <span className="metric-icon">🔥</span>
+            <strong>{streak}</strong>
+            <small>Daily Speak Streak</small>
+            <em>{todayComplete ? 'Today is complete' : 'Finish Daily Speak to extend it'}</em>
+          </article>
+
+          <article className="metric-card">
+            <span className="metric-icon">⚡</span>
+            <strong>{xp}</strong>
+            <small>Training XP</small>
+            <em>Earn XP by completing corrected lessons</em>
+          </article>
+
+          <article className="metric-card">
+            <span className="metric-icon">✅</span>
+            <strong>{completedActivities}</strong>
+            <small>Activities Completed</small>
+            <em>{completedCoreSessions}/{sessions.length || 0} core sessions in this block</em>
+          </article>
+        </section>
+
+        <section className="split-grid">
+          <article className="panel-card accent-panel">
+            <span className="tiny-label">☀️ DAILY SPEAK</span>
+            <h3>{todayComplete ? 'Today’s mission is complete.' : 'Your three-part daily routine is ready.'}</h3>
+            <p>Train once, practice three Power Phrases and complete one quick English challenge.</p>
+            <Link href="/daily" className="text-link">Open Daily Speak →</Link>
+          </article>
+
+          <article className="panel-card">
+            <span className="tiny-label">🎯 CURRENT MODE</span>
+            <h3>{mode}</h3>
+            <p>
+              {needsPlacement
+                ? 'Your placement result will appear here immediately after the test.'
+                : `Placement score: ${profile.placement_score}/100 · Block 01: ${blockPercent}% complete.`}
+            </p>
+            <Link href={needsPlacement ? '/placement-test' : '/placement-result'} className="text-link">
+              {needsPlacement ? 'Take placement test →' : 'View placement result →'}
+            </Link>
+          </article>
+        </section>
+
+        <section className="cartoon-card">
+          <SpeakBuddy variant="locked" compact />
+          <div>
+            <span className="locked-badge">🔒 SPEAKING · MUY PRONTO</span>
+            <h3>Voice conversation is the next major unlock.</h3>
+            <p>
+              Speaking and Live are intentionally locked while the production conversation plan is integrated.
+              Training now focuses on strong correction, useful phrases and daily repetition.
+            </p>
+            <Link href="/speak" className="text-link">See what is coming →</Link>
+          </div>
+        </section>
       </div>
     </>
   );

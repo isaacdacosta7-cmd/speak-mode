@@ -24,8 +24,8 @@ const steps = [
     icon: '✨',
     eyebrow: 'STEP 3',
     title: 'Practice, repeat and tell us what you feel.',
-    copy: 'Train builds the skill, Power Phrases keeps useful English active, Live gives eligible plans human conversation, and Beta Feedback helps us improve the product with you.',
-    chips: ['Train', 'Phrases', 'Live', 'Beta Feedback'],
+    copy: 'Train now corrects your written answers, Power Phrases builds your conversation library, and Speaking + Live will unlock very soon with the production conversation plan. Beta Feedback helps us improve the product with you.',
+    chips: ['Corrected Train', '75 Power Phrases', '🔒 Speaking soon', 'Beta Feedback'],
   },
 ];
 
