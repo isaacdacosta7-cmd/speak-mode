@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './TrainingSession.module.css';
 import { playUISound } from '@/lib/uiSound';
+import { evaluateTrainingAnswer } from '@/lib/correction';
+import SpeakBuddy from '@/components/SpeakBuddy';
 
 function speak(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -20,6 +22,44 @@ function speak(text) {
 
   if (voice) utterance.voice = voice;
   window.speechSynthesis.speak(utterance);
+}
+
+function CorrectionBox({ feedback }) {
+  if (!feedback) return null;
+
+  return (
+    <div className={`${styles.correctionBox} ${styles[`correction_${feedback.status}`]}`}>
+      <div className={styles.correctionHead}>
+        <span>
+          {feedback.status === 'correct' ? '✅' : feedback.status === 'almost' ? '⚠️' : '❌'}
+        </span>
+        <strong>{feedback.title}</strong>
+      </div>
+
+      {feedback.corrections?.length ? (
+        <ul>
+          {feedback.corrections.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p>Your sentence is clear, complete and fits the target pattern.</p>
+      )}
+
+      {feedback.suggested ? (
+        <div className={styles.correctionExample}>
+          <small>A QUICK FIX</small>
+          <strong>{feedback.suggested}</strong>
+        </div>
+      ) : null}
+
+      {feedback.model ? (
+        <div className={styles.correctionExample}>
+          <small>MODEL ANSWER</small>
+          <strong>{feedback.model}</strong>
+          <button type="button" onClick={() => speak(feedback.model)}>▶ Hear it</button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function TrainingSession({
@@ -40,105 +80,47 @@ export default function TrainingSession({
   const [heard, setHeard] = useState(false);
   const [repetitions, setRepetitions] = useState(0);
   const [buildAnswer, setBuildAnswer] = useState('');
+  const [buildFeedback, setBuildFeedback] = useState(null);
   const [quickAnswer, setQuickAnswer] = useState('');
+  const [quickFeedback, setQuickFeedback] = useState(null);
   const [roleChoice, setRoleChoice] = useState(null);
-  const [recording, setRecording] = useState(false);
-  const [recordingBlob, setRecordingBlob] = useState(null);
-  const [recordingUrl, setRecordingUrl] = useState('');
-  const [speakingSeconds, setSpeakingSeconds] = useState(0);
-  const [spokenFallback, setSpokenFallback] = useState(false);
-  const [micError, setMicError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [completed, setCompleted] = useState(false);
 
-  const recorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const streamRef = useRef(null);
-  const startTimeRef = useRef(null);
-
   const modeLabel = useMemo(() => mode.replaceAll('_', ' '), [mode]);
-
-  useEffect(() => {
-    if (!recordingBlob) {
-      setRecordingUrl('');
-      return undefined;
-    }
-
-    const url = URL.createObjectURL(recordingBlob);
-    setRecordingUrl(url);
-
-    return () => URL.revokeObjectURL(url);
-  }, [recordingBlob]);
-
-  useEffect(() => () => {
-    streamRef.current?.getTracks?.().forEach((track) => track.stop());
-  }, []);
 
   const next = () => {
     playUISound('tap');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    setStep((value) => Math.min(5, value + 1));
+    setStep((value) => Math.min(4, value + 1));
   };
 
-  const startRecording = async () => {
-    try {
-      setMicError('');
+  function checkBuild() {
+    const feedback = evaluateTrainingAnswer(buildAnswer, session.key, 'build');
+    setBuildFeedback(feedback);
+    playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+  }
 
-      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-        throw new Error('unsupported');
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      chunksRef.current = [];
-
-      const recorder = new MediaRecorder(stream);
-      recorderRef.current = recorder;
-      startTimeRef.current = Date.now();
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-        const duration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
-
-        setSpeakingSeconds((value) => Math.max(value, duration));
-        setRecordingBlob(blob);
-        setRecording(false);
-
-        stream.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      };
-
-      recorder.start();
-      setRecording(true);
-    } catch {
-      setMicError('Microphone access is unavailable here. Practice the prompt out loud and use the manual completion button.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (recorderRef.current?.state === 'recording') {
-      recorderRef.current.stop();
-    }
-  };
+  function checkQuickAnswer() {
+    const feedback = evaluateTrainingAnswer(quickAnswer, session.key, 'answer');
+    setQuickFeedback(feedback);
+    playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+  }
 
   const finishSession = async () => {
+    if (roleChoice !== session.best) return;
+
     setSaving(true);
-    setMicError('');
+    setSaveError('');
 
     try {
       const response = await fetch('/api/training-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          module_key: mode.toLowerCase(),
           session_key: session.key,
-          completion_percent: 100,
-          speaking_seconds: speakingSeconds || (spokenFallback ? 30 : 0),
-          xp: 100,
+          speaking_seconds: 0,
         }),
       });
 
@@ -153,7 +135,7 @@ export default function TrainingSession({
       router.refresh();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      setMicError(error.message || 'Could not save progress.');
+      setSaveError(error.message || 'Could not save progress.');
     } finally {
       setSaving(false);
     }
@@ -163,11 +145,11 @@ export default function TrainingSession({
     return (
       <div className={styles.sessionShell}>
         <section className={`${styles.stage} ${styles.completeStage}`}>
-          <div className={styles.completeIcon}>🏆</div>
+          <SpeakBuddy variant="celebrate" compact />
           <span className={styles.kicker}>SESSION {String(sessionNumber).padStart(2, '0')} COMPLETE</span>
-          <h1>🎉 +100 Speaking XP</h1>
+          <h1>🎉 +100 Training XP</h1>
           <p>
-            You completed <strong>{session.title}</strong> in {modeLabel}. Your progress and speaking time are saved.
+            You completed <strong>{session.title}</strong> in {modeLabel}. Your progress is saved.
           </p>
 
           <div className={styles.completeActions}>
@@ -205,6 +187,10 @@ export default function TrainingSession({
           <p>{session.subtitle}</p>
         </div>
 
+        <div className={styles.headerBuddy}>
+          <SpeakBuddy variant="study" compact />
+        </div>
+
         <div className={styles.scoreBadge}>
           <strong>{score}</strong>
           <span>placement</span>
@@ -212,12 +198,19 @@ export default function TrainingSession({
       </header>
 
       <div className={styles.stepper}>
-        {['🎧 Hear', '🗣 Copy', '🧩 Build', '⚡ Answer', '💬 Use', '🎙 Speak'].map((label, index) => (
+        {[
+          ['🎧 Hear', false],
+          ['🗣 Copy', false],
+          ['🧩 Build', false],
+          ['⚡ Answer', false],
+          ['💬 Use', false],
+          ['🔒 Speaking', true],
+        ].map(([label, locked], index) => (
           <div
             key={label}
-            className={`${styles.stepDot} ${index <= step ? styles.stepActive : ''}`}
+            className={`${styles.stepDot} ${index <= step && !locked ? styles.stepActive : ''} ${locked ? styles.stepLocked : ''}`}
           >
-            <span>{index + 1}</span>
+            <span>{locked ? '🔒' : index + 1}</span>
             <small>{label}</small>
           </div>
         ))}
@@ -286,20 +279,48 @@ export default function TrainingSession({
       {step === 2 ? (
         <section className={styles.stage}>
           <span className={styles.stageNumber}>03 · BUILD IT</span>
-          <h2>Make the structure yours.</h2>
+          <h2>Build it — then check it.</h2>
           <p className={styles.guidance}>{session.buildPrompt}</p>
 
           <div className={styles.buildBox}>
             <strong>{session.buildStem}</strong>
             <input
               value={buildAnswer}
-              onChange={(event) => setBuildAnswer(event.target.value)}
+              onChange={(event) => {
+                setBuildAnswer(event.target.value);
+                setBuildFeedback(null);
+              }}
               placeholder="Complete the thought…"
             />
           </div>
 
-          <button className={styles.primary} disabled={buildAnswer.trim().length < 2} onClick={next}>
-            Use my sentence
+          <div className={styles.checkActions}>
+            <button className={styles.checkButton} disabled={buildAnswer.trim().length < 2} onClick={checkBuild}>
+              ✓ Check my sentence
+            </button>
+
+            {buildFeedback && buildFeedback.status !== 'correct' && buildFeedback.model ? (
+              <button
+                className={styles.modelButton}
+                type="button"
+                onClick={() => {
+                  setBuildAnswer(buildFeedback.model);
+                  setBuildFeedback(null);
+                }}
+              >
+                Use model answer
+              </button>
+            ) : null}
+          </div>
+
+          <CorrectionBox feedback={buildFeedback} />
+
+          <button
+            className={styles.primary}
+            disabled={!buildFeedback?.canContinue}
+            onClick={next}
+          >
+            Continue
           </button>
         </section>
       ) : null}
@@ -307,20 +328,46 @@ export default function TrainingSession({
       {step === 3 ? (
         <section className={styles.stage}>
           <span className={styles.stageNumber}>04 · ANSWER IT</span>
-          <h2>Respond without overthinking.</h2>
+          <h2>Answer — and get corrected.</h2>
           <p className={styles.promptCard}>{session.quickPrompt}</p>
 
           <textarea
             className={styles.answerArea}
             value={quickAnswer}
-            onChange={(event) => setQuickAnswer(event.target.value)}
-            placeholder="Type the answer you would say out loud…"
+            onChange={(event) => {
+              setQuickAnswer(event.target.value);
+              setQuickFeedback(null);
+            }}
+            placeholder="Write the answer you would use in a real conversation…"
             rows={4}
           />
 
-          <p className={styles.tip}>Say your answer out loud once after typing it.</p>
+          <div className={styles.checkActions}>
+            <button className={styles.checkButton} disabled={quickAnswer.trim().length < 4} onClick={checkQuickAnswer}>
+              ✓ Check my answer
+            </button>
 
-          <button className={styles.primary} disabled={quickAnswer.trim().length < 4} onClick={next}>
+            {quickFeedback && quickFeedback.status !== 'correct' && quickFeedback.model ? (
+              <button
+                className={styles.modelButton}
+                type="button"
+                onClick={() => {
+                  setQuickAnswer(quickFeedback.model);
+                  setQuickFeedback(null);
+                }}
+              >
+                Use model answer
+              </button>
+            ) : null}
+          </div>
+
+          <CorrectionBox feedback={quickFeedback} />
+
+          <button
+            className={styles.primary}
+            disabled={!quickFeedback?.canContinue}
+            onClick={next}
+          >
             Continue
           </button>
         </section>
@@ -329,87 +376,68 @@ export default function TrainingSession({
       {step === 4 ? (
         <section className={styles.stage}>
           <span className={styles.stageNumber}>05 · USE IT</span>
-          <h2>Choose your move.</h2>
+          <h2>Choose the most natural move.</h2>
           <p className={styles.promptCard}>{session.rolePrompt}</p>
 
           <div className={styles.roleOptions}>
-            {session.roleOptions.map((option, index) => (
-              <button
-                key={option}
-                onClick={() => {
-                  setRoleChoice(index);
-                  playUISound(index === session.best ? 'success' : 'tap');
-                }}
-                className={`${styles.roleOption} ${roleChoice === index ? styles.roleSelected : ''}`}
-              >
-                <span>{roleChoice === index ? '✓' : String.fromCharCode(65 + index)}</span>
-                <p>{option}</p>
-              </button>
-            ))}
+            {session.roleOptions.map((option, index) => {
+              const selected = roleChoice === index;
+              const correct = index === session.best;
+
+              return (
+                <button
+                  key={option}
+                  onClick={() => {
+                    setRoleChoice(index);
+                    playUISound(correct ? 'success' : 'tap');
+                  }}
+                  className={`${styles.roleOption} ${selected ? styles.roleSelected : ''} ${selected && !correct ? styles.roleWrong : ''} ${selected && correct ? styles.roleCorrect : ''}`}
+                >
+                  <span>{selected ? (correct ? '✓' : '✕') : String.fromCharCode(65 + index)}</span>
+                  <p>{option}</p>
+                </button>
+              );
+            })}
           </div>
 
           {roleChoice !== null ? (
-            <div className={styles.feedback}>
-              {roleChoice === session.best
-                ? 'Natural choice. It responds, adds something useful and keeps the conversation open.'
-                : 'Try the first option once out loud. Listen for the complete conversational thought.'}
+            <div className={`${styles.feedback} ${roleChoice === session.best ? styles.feedbackCorrect : styles.feedbackWrong}`}>
+              {roleChoice === session.best ? (
+                <>
+                  <strong>✅ Correct.</strong>
+                  <p>This response sounds natural, responds to the other person and keeps the conversation moving.</p>
+                </>
+              ) : (
+                <>
+                  <strong>❌ That answer needs correction.</strong>
+                  <p>
+                    A more natural answer is: <b>{session.roleOptions[session.best]}</b>
+                  </p>
+                  <button type="button" onClick={() => speak(session.roleOptions[session.best])}>▶ Hear the correct answer</button>
+                </>
+              )}
             </div>
           ) : null}
 
-          <button className={styles.primary} disabled={roleChoice === null} onClick={next}>
-            Go to speaking
-          </button>
-        </section>
-      ) : null}
-
-      {step === 5 ? (
-        <section className={styles.stage}>
-          <span className={styles.stageNumber}>06 · SPEAK IT</span>
-          <h2>Put everything together.</h2>
-          <p className={styles.promptCard}>{session.speakPrompt}</p>
-
-          <div className={styles.powerRow}>
-            {session.power.map((item) => <span key={item}>{item}</span>)}
+          <div className={styles.lockedPreview}>
+            <SpeakBuddy variant="locked" compact />
+            <div>
+              <span>🔒 SPEAKING · MUY PRONTO</span>
+              <h3>Real voice conversation is coming in the next release.</h3>
+              <p>
+                This module will unlock with the production speaking plan. For now, complete the corrected training lesson and keep building the language you will use there.
+              </p>
+            </div>
           </div>
 
-          <div className={styles.recordBox}>
-            {recording ? (
-              <button className={`${styles.recordButton} ${styles.recording}`} onClick={stopRecording}>
-                ■ Stop recording
-              </button>
-            ) : (
-              <button className={styles.recordButton} onClick={startRecording}>
-                {recordingBlob ? '↻ Record again' : '● Start speaking'}
-              </button>
-            )}
-
-            {recordingUrl ? (
-              <audio className={styles.audioPlayback} controls src={recordingUrl} />
-            ) : null}
-
-            <button
-              className={styles.fallbackButton}
-              onClick={() => {
-                setSpokenFallback(true);
-                setSpeakingSeconds((value) => Math.max(value, 30));
-              }}
-            >
-              I practiced it out loud
-            </button>
-          </div>
-
-          {speakingSeconds > 0 ? (
-            <p className={styles.speakingTime}>Speaking practice: {speakingSeconds}s</p>
-          ) : null}
-
-          {micError ? <div className={styles.notice}>{micError}</div> : null}
+          {saveError ? <div className={styles.notice}>{saveError}</div> : null}
 
           <button
             className={styles.primary}
-            disabled={(!recordingBlob && !spokenFallback) || saving}
+            disabled={roleChoice !== session.best || saving}
             onClick={finishSession}
           >
-            {saving ? 'Saving progress…' : 'Complete session · +100 XP'}
+            {saving ? 'Saving progress…' : 'Complete corrected session · +100 XP'}
           </button>
         </section>
       ) : null}
