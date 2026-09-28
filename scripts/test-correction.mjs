@@ -76,6 +76,9 @@ const mustPass = [
     type: 'phrase',
     targetText: "I'm from…",
   }],
+  ['I usually wake up early and start work at eight.', {
+    type: 'open',
+  }],
 ];
 
 const failures = [];
