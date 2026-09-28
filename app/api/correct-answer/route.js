@@ -22,7 +22,8 @@ export async function POST(request) {
 
   const text = String(body.text || '').trim();
   const sessionKey = String(body.session_key || '').trim();
-  const type = ['build', 'answer', 'open'].includes(body.type) ? body.type : 'answer';
+  const type = ['build', 'answer', 'open', 'phrase'].includes(body.type) ? body.type : 'answer';
+  const targetText = String(body.target_text || '').trim();
 
   if (text.length < 1 || text.length > 1000) {
     return NextResponse.json(
@@ -31,9 +32,17 @@ export async function POST(request) {
     );
   }
 
+  if (type === 'phrase' && (targetText.length < 1 || targetText.length > 200)) {
+    return NextResponse.json(
+      { error: 'Target phrase is required.' },
+      { status: 400 }
+    );
+  }
+
   const result = correctEnglishAnswer(text, {
     sessionKey,
     type,
+    targetText,
   });
 
   return NextResponse.json({
