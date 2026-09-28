@@ -152,6 +152,10 @@ export default function PhraseTrainer({ mode, initialProgress }) {
   const [progress, setProgress] = useState(initialMap);
   const [saving, setSaving] = useState('');
   const [message, setMessage] = useState('');
+  const [writingKey, setWritingKey] = useState('');
+  const [writingAnswers, setWritingAnswers] = useState({});
+  const [writingFeedback, setWritingFeedback] = useState({});
+  const [checkingPhrase, setCheckingPhrase] = useState('');
 
   const orderedPhrases = useMemo(() => {
     const now = new Date();
@@ -174,6 +178,50 @@ export default function PhraseTrainer({ mode, initialProgress }) {
     const item = progress[key];
     return item?.progress_percent >= 100 && item?.next_review_at && new Date(item.next_review_at) <= new Date();
   }).length;
+
+  async function checkWrittenPhrase(key, phrase) {
+    const answer = String(writingAnswers[key] || '').trim();
+    if (!answer) return;
+
+    setCheckingPhrase(key);
+
+    try {
+      const response = await fetch('/api/correct-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: answer,
+          type: 'phrase',
+          target_text: phrase,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.result) {
+        throw new Error(payload.error || 'Could not check this phrase.');
+      }
+
+      setWritingFeedback((current) => ({
+        ...current,
+        [key]: payload.result,
+      }));
+
+      playUISound(payload.result.canContinue ? 'success' : 'tap');
+    } catch (error) {
+      setWritingFeedback((current) => ({
+        ...current,
+        [key]: {
+          status: 'fix',
+          title: 'Could not check this phrase.',
+          corrections: [error.message || 'Try again.'],
+          canContinue: false,
+        },
+      }));
+    } finally {
+      setCheckingPhrase('');
+    }
+  }
 
   async function practice(key) {
     const previous = progress[key] || {
@@ -296,6 +344,60 @@ export default function PhraseTrainer({ mode, initialProgress }) {
                 <div className={styles.track}>
                   <i style={{ width: `${percent}%` }} />
                 </div>
+
+                <button
+                  type="button"
+                  className={styles.writeToggle}
+                  onClick={() => {
+                    setWritingKey((current) => current === key ? '' : key);
+                    playUISound('tap');
+                  }}
+                >
+                  ✍️ {writingKey === key ? 'Hide writing check' : 'Write & check'}
+                </button>
+
+                {writingKey === key ? (
+                  <div className={styles.writePractice}>
+                    <label>Write the phrase from memory</label>
+                    <input
+                      value={writingAnswers[key] || ''}
+                      spellCheck="true"
+                      autoCapitalize="sentences"
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setWritingAnswers((current) => ({ ...current, [key]: value }));
+                        setWritingFeedback((current) => ({ ...current, [key]: null }));
+                      }}
+                      placeholder={phrase.includes('…') ? 'Start with the phrase and complete it…' : 'Type the phrase exactly…'}
+                    />
+                    <button
+                      type="button"
+                      className={styles.checkWriting}
+                      disabled={!String(writingAnswers[key] || '').trim() || checkingPhrase === key}
+                      onClick={() => checkWrittenPhrase(key, phrase)}
+                    >
+                      {checkingPhrase === key ? 'Checking English…' : '✓ Check spelling & English'}
+                    </button>
+
+                    {writingFeedback[key] ? (
+                      <div className={`${styles.writeFeedback} ${styles[`writeFeedback_${writingFeedback[key].status}`]}`}>
+                        <strong>
+                          {writingFeedback[key].canContinue ? '✅ Correct.' : '❌ Correction required.'}
+                        </strong>
+                        {writingFeedback[key].corrections?.length ? (
+                          <ul>
+                            {writingFeedback[key].corrections.map((item) => <li key={item}>{item}</li>)}
+                          </ul>
+                        ) : (
+                          <p>You wrote the phrase correctly.</p>
+                        )}
+                        {!writingFeedback[key].canContinue && writingFeedback[key].model ? (
+                          <p><b>Target:</b> {writingFeedback[key].model}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className={styles.progress}>

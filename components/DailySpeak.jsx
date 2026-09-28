@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './DailySpeak.module.css';
 import { playUISound } from '@/lib/uiSound';
-import { evaluateOpenAnswer } from '@/lib/correction';
 import SpeakBuddy from '@/components/SpeakBuddy';
 
 export default function DailySpeak({
@@ -25,6 +24,7 @@ export default function DailySpeak({
   const router = useRouter();
   const [response, setResponse] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -44,11 +44,34 @@ export default function DailySpeak({
       .catch(() => {});
   }, [timezone, router]);
 
-  function checkChallenge() {
-    const result = evaluateOpenAnswer(response);
-    setFeedback(result);
+  async function checkChallenge() {
+    setChecking(true);
     setMessage('');
-    playUISound(result.status === 'correct' ? 'success' : 'tap');
+
+    try {
+      const res = await fetch('/api/correct-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: response,
+          type: 'open',
+        }),
+      });
+
+      const payload = await res.json();
+
+      if (!res.ok || !payload.result) {
+        throw new Error(payload.error || 'Could not check this answer.');
+      }
+
+      setFeedback(payload.result);
+      playUISound(payload.result.status === 'correct' ? 'success' : 'tap');
+    } catch (error) {
+      setFeedback(null);
+      setMessage(error.message || 'Could not check this answer.');
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function completeChallenge(event) {
@@ -180,10 +203,10 @@ export default function DailySpeak({
                   <button
                     type="button"
                     className={styles.check}
-                    disabled={response.trim().length < 4}
+                    disabled={response.trim().length < 4 || checking}
                     onClick={checkChallenge}
                   >
-                    ✓ Check my answer
+                    {checking ? 'Checking English…' : '✓ Check my answer'}
                   </button>
 
                   <button

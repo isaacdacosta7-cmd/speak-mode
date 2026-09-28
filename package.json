@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "build": "npm run test:correction && next build",
+    "start": "next start",
+    "test:correction": "node scripts/test-correction.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

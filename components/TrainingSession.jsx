@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './TrainingSession.module.css';
 import { playUISound } from '@/lib/uiSound';
-import { evaluateTrainingAnswer } from '@/lib/correction';
 import SpeakBuddy from '@/components/SpeakBuddy';
 
 function speak(text) {
@@ -81,8 +80,11 @@ export default function TrainingSession({
   const [repetitions, setRepetitions] = useState(0);
   const [buildAnswer, setBuildAnswer] = useState('');
   const [buildFeedback, setBuildFeedback] = useState(null);
+  const [checkingBuild, setCheckingBuild] = useState(false);
   const [quickAnswer, setQuickAnswer] = useState('');
   const [quickFeedback, setQuickFeedback] = useState(null);
+  const [checkingQuick, setCheckingQuick] = useState(false);
+  const [checkError, setCheckError] = useState('');
   const [roleChoice, setRoleChoice] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -96,16 +98,56 @@ export default function TrainingSession({
     setStep((value) => Math.min(4, value + 1));
   };
 
-  function checkBuild() {
-    const feedback = evaluateTrainingAnswer(buildAnswer, session.key, 'build');
-    setBuildFeedback(feedback);
-    playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+  async function requestCorrection(text, type) {
+    const response = await fetch('/api/correct-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        type,
+        session_key: session.key,
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok || !payload.result) {
+      throw new Error(payload.error || 'Could not check this answer.');
+    }
+
+    return payload.result;
   }
 
-  function checkQuickAnswer() {
-    const feedback = evaluateTrainingAnswer(quickAnswer, session.key, 'answer');
-    setQuickFeedback(feedback);
-    playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+  async function checkBuild() {
+    setCheckingBuild(true);
+    setCheckError('');
+
+    try {
+      const feedback = await requestCorrection(buildAnswer, 'build');
+      setBuildFeedback(feedback);
+      playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+    } catch (error) {
+      setBuildFeedback(null);
+      setCheckError(error.message || 'Could not check this sentence.');
+    } finally {
+      setCheckingBuild(false);
+    }
+  }
+
+  async function checkQuickAnswer() {
+    setCheckingQuick(true);
+    setCheckError('');
+
+    try {
+      const feedback = await requestCorrection(quickAnswer, 'answer');
+      setQuickFeedback(feedback);
+      playUISound(feedback.status === 'correct' ? 'success' : 'tap');
+    } catch (error) {
+      setQuickFeedback(null);
+      setCheckError(error.message || 'Could not check this answer.');
+    } finally {
+      setCheckingQuick(false);
+    }
   }
 
   const finishSession = async () => {
@@ -288,6 +330,7 @@ export default function TrainingSession({
               onChange={(event) => {
                 setBuildAnswer(event.target.value);
                 setBuildFeedback(null);
+                setCheckError('');
               }}
               placeholder={`${session.buildStem} …`}
               aria-label="Write the complete sentence"
@@ -296,8 +339,12 @@ export default function TrainingSession({
           <p className={styles.tip}>Write the complete sentence, including the opening words shown above.</p>
 
           <div className={styles.checkActions}>
-            <button className={styles.checkButton} disabled={buildAnswer.trim().length < 2} onClick={checkBuild}>
-              ✓ Check my sentence
+            <button
+              className={styles.checkButton}
+              disabled={buildAnswer.trim().length < 2 || checkingBuild}
+              onClick={checkBuild}
+            >
+              {checkingBuild ? 'Checking English…' : '✓ Check my sentence'}
             </button>
 
             {buildFeedback && buildFeedback.status !== 'correct' && buildFeedback.model ? (
@@ -315,6 +362,7 @@ export default function TrainingSession({
           </div>
 
           <CorrectionBox feedback={buildFeedback} />
+          {checkError ? <div className={styles.notice}>{checkError}</div> : null}
 
           <button
             className={styles.primary}
@@ -344,8 +392,12 @@ export default function TrainingSession({
           />
 
           <div className={styles.checkActions}>
-            <button className={styles.checkButton} disabled={quickAnswer.trim().length < 4} onClick={checkQuickAnswer}>
-              ✓ Check my answer
+            <button
+              className={styles.checkButton}
+              disabled={quickAnswer.trim().length < 4 || checkingQuick}
+              onClick={checkQuickAnswer}
+            >
+              {checkingQuick ? 'Checking English…' : '✓ Check my answer'}
             </button>
 
             {quickFeedback && quickFeedback.status !== 'correct' && quickFeedback.model ? (
@@ -363,6 +415,7 @@ export default function TrainingSession({
           </div>
 
           <CorrectionBox feedback={quickFeedback} />
+          {checkError ? <div className={styles.notice}>{checkError}</div> : null}
 
           <button
             className={styles.primary}
