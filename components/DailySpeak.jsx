@@ -25,7 +25,6 @@ export default function DailySpeak({
   const [response, setResponse] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [checking, setChecking] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -50,12 +49,12 @@ export default function DailySpeak({
     setMessage('');
 
     try {
-      const res = await fetch('/api/correct-answer', {
+      const res = await fetch('/api/correction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          kind: 'open',
           text: response,
-          type: 'open',
         }),
       });
 
