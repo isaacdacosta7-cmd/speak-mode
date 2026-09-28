@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getModeSessions } from '@/lib/curriculum';
+import BetaOnboarding from '@/components/BetaOnboarding';
 
 function titleCaseMode(mode) {
   return mode ? mode.replaceAll('_', ' ') : 'PLACEMENT PENDING';
@@ -56,7 +57,7 @@ export default async function DashboardPage() {
   const [{ data: profile }, { data: progressRows }, { data: dailyRows }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('full_name, placement_score, placement_mode, daily_goal_minutes, timezone')
+      .select('full_name, placement_score, placement_mode, daily_goal_minutes, timezone, onboarding_completed')
       .eq('id', claims.sub)
       .maybeSingle(),
     supabase
@@ -117,7 +118,12 @@ export default async function DashboardPage() {
   const todayComplete = Boolean((dailyRows || []).find((row) => row.activity_date === today)?.completed);
 
   return (
-    <div className="dashboard-stack">
+    <>
+      {!profile?.onboarding_completed ? (
+        <BetaOnboarding firstName={firstName} />
+      ) : null}
+
+      <div className="dashboard-stack">
       <section className="hero-training">
         <div>
           <span className="eyebrow">WELCOME, {firstName.toUpperCase()}</span>
@@ -260,6 +266,7 @@ export default async function DashboardPage() {
         <h3>Voice Conversation is temporarily held for the beta infrastructure upgrade.</h3>
         <p>Structured training, Daily Speak, Power Phrases and Live human sessions remain active while the production speech service is integrated.</p>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
