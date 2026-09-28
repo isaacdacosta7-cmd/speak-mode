@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './DailySpeak.module.css';
 import { playUISound } from '@/lib/uiSound';
+import { evaluateOpenAnswer } from '@/lib/correction';
+import SpeakBuddy from '@/components/SpeakBuddy';
 
 export default function DailySpeak({
   firstName,
@@ -22,6 +24,7 @@ export default function DailySpeak({
 }) {
   const router = useRouter();
   const [response, setResponse] = useState('');
+  const [feedback, setFeedback] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -41,9 +44,20 @@ export default function DailySpeak({
       .catch(() => {});
   }, [timezone, router]);
 
+  function checkChallenge() {
+    const result = evaluateOpenAnswer(response);
+    setFeedback(result);
+    setMessage('');
+    playUISound(result.status === 'correct' ? 'success' : 'tap');
+  }
+
   async function completeChallenge(event) {
     event.preventDefault();
-    if (response.trim().length < 2) return;
+
+    if (!feedback?.canContinue) {
+      checkChallenge();
+      return;
+    }
 
     setSaving(true);
     setMessage('');
@@ -83,20 +97,23 @@ export default function DailySpeak({
           <span className="eyebrow">☀️ DAILY SPEAK</span>
           <h1>{missionComplete ? 'Daily mission complete.' : `Your English for today, ${firstName}.`}</h1>
           <p>
-            One training session, three Power Phrases and one quick challenge.
+            One corrected training session, three Power Phrases and one checked challenge.
             Keep the routine small enough to repeat every day.
           </p>
           <div className="celebration-row">
-            <span>🎯 One focused session</span>
+            <span>🎯 One corrected session</span>
             <span>✨ Three useful phrases</span>
-            <span>💬 One quick challenge</span>
+            <span>✅ One checked challenge</span>
           </div>
         </div>
 
-        <div className={styles.streak}>
-          <span>🔥</span>
-          <strong>{streak}</strong>
-          <small>day streak</small>
+        <div className={styles.heroVisual}>
+          <SpeakBuddy variant={missionComplete ? 'celebrate' : 'study'} compact />
+          <div className={styles.streak}>
+            <span>🔥</span>
+            <strong>{streak}</strong>
+            <small>day streak</small>
+          </div>
         </div>
       </header>
 
@@ -117,7 +134,7 @@ export default function DailySpeak({
           <div className={styles.copy}>
             <span>TRAIN</span>
             <h2>{trainingDone ? 'Training complete for today' : nextSessionTitle}</h2>
-            <p>Complete one structured conversation session.</p>
+            <p>Complete one structured lesson with correction before moving on.</p>
           </div>
           <Link href={`/train/${nextSessionKey}`}>
             {trainingDone ? 'Review' : 'Start'} →
@@ -132,17 +149,17 @@ export default function DailySpeak({
             <p>
               {dueCount > 0
                 ? `${dueCount} spaced-review phrase${dueCount === 1 ? '' : 's'} due now.`
-                : 'Practice three different phrases and say each one out loud.'}
+                : 'Practice three different phrases from your conversation library.'}
             </p>
           </div>
           <Link href="/phrases">Practice →</Link>
         </article>
 
         <article className={`${styles.task} ${challengeDone ? styles.done : ''}`}>
-          <div className={styles.icon}>{challengeDone ? '✅' : '💬'}</div>
+          <div className={styles.icon}>{challengeDone ? '✅' : '🧠'}</div>
           <div className={styles.copy}>
-            <span>QUICK CHALLENGE</span>
-            <h2>{challengeDone ? 'Challenge complete' : 'Think, say it, then write it.'}</h2>
+            <span>QUICK CHALLENGE · CORRECTED</span>
+            <h2>{challengeDone ? 'Challenge complete' : 'Think it, write it, check it.'}</h2>
             <p>{challengePrompt}</p>
 
             {!challengeDone ? (
@@ -151,13 +168,57 @@ export default function DailySpeak({
                   rows={4}
                   maxLength={1000}
                   value={response}
-                  onChange={(event) => setResponse(event.target.value)}
-                  placeholder="Say your answer out loud first, then type the version you want to keep…"
+                  onChange={(event) => {
+                    setResponse(event.target.value);
+                    setFeedback(null);
+                    setMessage('');
+                  }}
+                  placeholder="Write a complete English answer…"
                 />
+
+                <div className={styles.challengeActions}>
+                  <button
+                    type="button"
+                    className={styles.check}
+                    disabled={response.trim().length < 4}
+                    onClick={checkChallenge}
+                  >
+                    ✓ Check my answer
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={saving || !feedback?.canContinue}
+                  >
+                    {saving ? 'Saving…' : 'Save corrected challenge'}
+                  </button>
+                </div>
+
+                {feedback ? (
+                  <div className={`${styles.feedback} ${styles[`feedback_${feedback.status}`]}`}>
+                    <strong>
+                      {feedback.status === 'correct' ? '✅ ' : feedback.status === 'almost' ? '⚠️ ' : '❌ '}
+                      {feedback.title}
+                    </strong>
+
+                    {feedback.corrections?.length ? (
+                      <ul>
+                        {feedback.corrections.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <p>Your answer is complete enough to save for today.</p>
+                    )}
+
+                    {feedback.suggested ? (
+                      <div>
+                        <small>QUICK FIX</small>
+                        <p>{feedback.suggested}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {message ? <small>{message}</small> : null}
-                <button type="submit" disabled={saving || response.trim().length < 2}>
-                  {saving ? 'Saving…' : 'Complete challenge'}
-                </button>
               </form>
             ) : null}
           </div>
