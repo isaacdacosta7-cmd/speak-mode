@@ -81,10 +81,8 @@ export default function TrainingSession({
   const [buildAnswer, setBuildAnswer] = useState('');
   const [buildFeedback, setBuildFeedback] = useState(null);
   const [checkingBuild, setCheckingBuild] = useState(false);
-  const [checkingBuild, setCheckingBuild] = useState(false);
   const [quickAnswer, setQuickAnswer] = useState('');
   const [quickFeedback, setQuickFeedback] = useState(null);
-  const [checkingQuick, setCheckingQuick] = useState(false);
   const [checkingQuick, setCheckingQuick] = useState(false);
   const [checkError, setCheckError] = useState('');
   const [roleChoice, setRoleChoice] = useState(null);
@@ -101,12 +99,13 @@ export default function TrainingSession({
   };
 
   async function requestCorrection(text, type) {
-    const response = await fetch('/api/correct-answer', {
+    const response = await fetch('/api/correction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        kind: 'training',
         text,
-        type,
+        answer_type: type,
         session_key: session.key,
       }),
     });
