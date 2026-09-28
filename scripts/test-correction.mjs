@@ -9,6 +9,7 @@ const phraseTrainerPath = path.join(root, 'components', 'PhraseTrainer.jsx');
 
 let coreSource = fs.readFileSync(corePath, 'utf8')
   .replace(/export const /g, 'const ')
+  .replace(/export async function /g, 'async function ')
   .replace(/export function /g, 'function ');
 
 coreSource += '\nreturn { CORRECTION_GUIDES, analyzeAnswer };';
