@@ -7,10 +7,10 @@ import styles from './TrainPath.module.css';
 const loopSteps = [
   ['01', 'Hear It', 'Listen to the complete thought in natural English.'],
   ['02', 'Copy It', 'Repeat the rhythm until the phrase feels comfortable.'],
-  ['03', 'Build It', 'Change the structure with your own information.'],
-  ['04', 'Answer It', 'Respond quickly with your own words.'],
-  ['05', 'Use It', 'Choose a natural move inside a real situation.'],
-  ['06', 'Speak It', 'Finish by producing the English out loud.'],
+  ['03', 'Build It', 'Write your own sentence and get immediate correction.'],
+  ['04', 'Answer It', 'Respond in your own words and fix mistakes before moving on.'],
+  ['05', 'Use It', 'Choose the most natural move inside a real situation.'],
+  ['🔒', 'Speaking', 'Muy pronto: voice conversation unlocks with the production speaking plan.'],
 ];
 
 export const dynamic = 'force-dynamic';
