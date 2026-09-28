@@ -283,16 +283,17 @@ export default function TrainingSession({
           <p className={styles.guidance}>{session.buildPrompt}</p>
 
           <div className={styles.buildBox}>
-            <strong>{session.buildStem}</strong>
             <input
               value={buildAnswer}
               onChange={(event) => {
                 setBuildAnswer(event.target.value);
                 setBuildFeedback(null);
               }}
-              placeholder="Complete the thought…"
+              placeholder={`${session.buildStem} …`}
+              aria-label="Write the complete sentence"
             />
           </div>
+          <p className={styles.tip}>Write the complete sentence, including the opening words shown above.</p>
 
           <div className={styles.checkActions}>
             <button className={styles.checkButton} disabled={buildAnswer.trim().length < 2} onClick={checkBuild}>
