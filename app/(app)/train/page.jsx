@@ -144,7 +144,7 @@ export default async function TrainPage() {
           <span>✍️ Build</span>
           <span>⚡ Answer</span>
           <span>💬 Use</span>
-          <span>🎙 Speak</span>
+          <span>🔒 Speaking soon</span>
         </div>
 
         <Link href={`/train/${activeSession.key}`} className="button button-primary">
@@ -213,8 +213,8 @@ export default async function TrainPage() {
       <section className="split-grid">
         <article className="panel-card">
           <span className="tiny-label">BLOCK REWARD</span>
-          <h3>{sessions.length * 100} Speaking XP</h3>
-          <p>Complete the five sessions to finish the first conversation block in {meta.label}.</p>
+          <h3>{sessions.length * 100} Training XP</h3>
+          <p>Complete the five corrected sessions to finish the first conversation block in {meta.label}. Speaking unlocks in the upcoming voice release.</p>
         </article>
 
         <article className="panel-card accent-panel">
