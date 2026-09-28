@@ -58,3 +58,24 @@ test('phrase writing rejects misspelling and accepts exact phrase', () => {
   const good = correctPhraseWriting("I get where you're coming from.", "I get where you're coming from.");
   assert.equal(good.canContinue, true, JSON.stringify(good, null, 2));
 });
+
+
+test('rejects deliberately misspelled Spanish-looking garbage', () => {
+  const result = correctOpenAnswer('ola perrro komoo stas mui vien.');
+  assert.equal(result.canContinue, false);
+  assert.equal(result.status, 'fix');
+  assert.ok(result.spelling.length >= 3 || result.corrections.some((item) => /standard English|spelling|recognized/i.test(item)));
+});
+
+test('rejects a mixed Spanish-English answer', () => {
+  const result = correctOpenAnswer('I work en mi casa porque is better.');
+  assert.equal(result.canContinue, false);
+  assert.equal(result.status, 'fix');
+  assert.ok(result.corrections.some((item) => /English|Spanish|spelling/i.test(item)));
+});
+
+test('rejects a single important misspelling in a phrase', () => {
+  const result = correctPhraseWriting("I get where you're comming from.", "I get where you're coming from.");
+  assert.equal(result.canContinue, false);
+  assert.equal(result.status, 'fix');
+});
