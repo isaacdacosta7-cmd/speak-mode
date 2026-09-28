@@ -1,0 +1,42 @@
+name: Correction tests
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - 'lib/correction.js'
+      - 'lib/serverCorrection.js'
+      - 'app/api/correction/**'
+      - 'components/TrainingSession.jsx'
+      - 'components/DailySpeak.jsx'
+      - 'components/PhraseTrainer.jsx'
+      - 'tests/correction.test.mjs'
+      - 'package.json'
+      - '.github/workflows/correction-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  correction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dummy-test-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run correction tests
+        run: npm run test:correction
+
+      - name: Build application
+        run: npm run build

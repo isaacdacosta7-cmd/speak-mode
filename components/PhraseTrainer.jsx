@@ -186,13 +186,13 @@ export default function PhraseTrainer({ mode, initialProgress }) {
     setCheckingPhrase(key);
 
     try {
-      const response = await fetch('/api/correct-answer', {
+      const response = await fetch('/api/correction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          kind: 'phrase',
           text: answer,
-          type: 'phrase',
-          target_text: phrase,
+          target_phrase: phrase,
         }),
       });
 

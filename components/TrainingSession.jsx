@@ -99,12 +99,13 @@ export default function TrainingSession({
   };
 
   async function requestCorrection(text, type) {
-    const response = await fetch('/api/correct-answer', {
+    const response = await fetch('/api/correction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        kind: 'training',
         text,
-        type,
+        answer_type: type,
         session_key: session.key,
       }),
     });

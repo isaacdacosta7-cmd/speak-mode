@@ -49,12 +49,12 @@ export default function DailySpeak({
     setMessage('');
 
     try {
-      const res = await fetch('/api/correct-answer', {
+      const res = await fetch('/api/correction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          kind: 'open',
           text: response,
-          type: 'open',
         }),
       });
 
