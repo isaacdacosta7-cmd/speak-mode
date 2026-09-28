@@ -6,17 +6,48 @@ export default function HomePage() {
     <main className="welcome-page">
       <div className="ambient ambient-a" />
       <div className="ambient ambient-b" />
+
       <section className="welcome-card">
         <Brand size="large" />
-        <span className="eyebrow">CONVERSATIONAL ENGLISH TRAINING</span>
+
+        <span className="eyebrow">✨ PRIVATE BETA · CONVERSATIONAL ENGLISH</span>
         <h1>Turn English into a reflex.</h1>
+
         <p>
-          Practice. Repeat. Respond. Speak. Your training adapts to your level and keeps the conversation moving.
+          Speak Mode trains useful English through short daily practice, repetition,
+          quick responses and conversation-focused sessions adapted to your level.
         </p>
-        <div className="welcome-actions">
-          <Link className="button button-primary" href="/login">Enter Speak Mode</Link>
-          <Link className="button button-ghost" href="/signup">Create account</Link>
+
+        <div className="celebration-row">
+          <span>🎯 Placement + personal MODE</span>
+          <span>☀️ Daily Speak</span>
+          <span>✨ Power Phrases</span>
+          <span>🔥 Real streak</span>
         </div>
+
+        <div className="welcome-actions">
+          <Link className="button button-primary" href="/signup">Join the private beta →</Link>
+          <Link className="button button-ghost" href="/login">I already have an account</Link>
+        </div>
+
+        <div className="beta-steps">
+          <div>
+            <strong>01</strong>
+            <span>Take the placement test</span>
+          </div>
+          <div>
+            <strong>02</strong>
+            <span>Get your Speak Mode</span>
+          </div>
+          <div>
+            <strong>03</strong>
+            <span>Start your daily training</span>
+          </div>
+        </div>
+
+        <small className="beta-note">
+          Private beta · Voice Conversation is being prepared for the production speech integration.
+        </small>
       </section>
     </main>
   );

@@ -364,3 +364,77 @@ begin
     and saved.session_key = p_session_key;
 end;
 $$;
+
+
+-- =========================================================
+-- Speak Mode beta habit system
+-- =========================================================
+
+alter table public.profiles
+  add column if not exists timezone text not null default 'UTC';
+
+alter table public.phrase_progress
+  add column if not exists review_stage integer not null default 0
+    check (review_stage between 0 and 5),
+  add column if not exists next_review_at timestamptz,
+  add column if not exists mastered_at timestamptz;
+
+create table if not exists public.daily_activity (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  activity_date date not null,
+  training_keys text[] not null default '{}',
+  phrase_keys text[] not null default '{}',
+  challenge_keys text[] not null default '{}',
+  completed boolean generated always as (
+    cardinality(training_keys) >= 1
+    and cardinality(phrase_keys) >= 3
+    and cardinality(challenge_keys) >= 1
+  ) stored,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, activity_date)
+);
+
+alter table public.daily_activity enable row level security;
+revoke all on table public.daily_activity from anon, authenticated;
+grant select on table public.daily_activity to authenticated;
+
+drop policy if exists "Users can read their own daily activity" on public.daily_activity;
+create policy "Users can read their own daily activity"
+on public.daily_activity
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create table if not exists public.daily_challenge_answers (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  activity_date date not null,
+  challenge_key text not null,
+  response_text text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, activity_date, challenge_key)
+);
+
+alter table public.daily_challenge_answers enable row level security;
+revoke all on table public.daily_challenge_answers from anon, authenticated;
+grant select on table public.daily_challenge_answers to authenticated;
+
+create table if not exists public.beta_feedback (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  feedback_type text not null
+    check (feedback_type in ('bug','confusing','like','suggestion')),
+  message text not null check (length(message) between 2 and 2000),
+  page_path text,
+  status text not null default 'new'
+    check (status in ('new','reviewed','resolved')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.beta_feedback enable row level security;
+revoke all on table public.beta_feedback from anon, authenticated;
+grant select on table public.beta_feedback to authenticated;
+
+-- Daily activity writes, phrase review scheduling, timezone changes,
+-- beta feedback, and admin overview access are handled through
+-- authenticated SECURITY DEFINER RPCs applied as migrations.

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './TrainingSession.module.css';
+import { playUISound } from '@/lib/uiSound';
 
 function speak(text) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -74,6 +75,7 @@ export default function TrainingSession({
   }, []);
 
   const next = () => {
+    playUISound('tap');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setStep((value) => Math.min(5, value + 1));
   };
@@ -146,6 +148,7 @@ export default function TrainingSession({
         throw new Error(payload.error || 'Could not save progress.');
       }
 
+      playUISound('complete');
       setCompleted(true);
       router.refresh();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -160,9 +163,9 @@ export default function TrainingSession({
     return (
       <div className={styles.sessionShell}>
         <section className={`${styles.stage} ${styles.completeStage}`}>
-          <div className={styles.completeIcon}>✓</div>
+          <div className={styles.completeIcon}>🏆</div>
           <span className={styles.kicker}>SESSION {String(sessionNumber).padStart(2, '0')} COMPLETE</span>
-          <h1>+100 Speaking XP</h1>
+          <h1>🎉 +100 Speaking XP</h1>
           <p>
             You completed <strong>{session.title}</strong> in {modeLabel}. Your progress and speaking time are saved.
           </p>
@@ -209,7 +212,7 @@ export default function TrainingSession({
       </header>
 
       <div className={styles.stepper}>
-        {['Hear', 'Copy', 'Build', 'Answer', 'Use', 'Speak'].map((label, index) => (
+        {['🎧 Hear', '🗣 Copy', '🧩 Build', '⚡ Answer', '💬 Use', '🎙 Speak'].map((label, index) => (
           <div
             key={label}
             className={`${styles.stepDot} ${index <= step ? styles.stepActive : ''}`}
@@ -265,7 +268,11 @@ export default function TrainingSession({
           <div className={styles.repBox}>
             <span>REPETITIONS</span>
             <strong>{repetitions}/3</strong>
-            <button onClick={() => setRepetitions((value) => Math.min(3, value + 1))}>
+            <button onClick={() => setRepetitions((value) => {
+              const nextValue = Math.min(3, value + 1);
+              playUISound(nextValue === 3 ? 'success' : 'tap');
+              return nextValue;
+            })}>
               I repeated it
             </button>
           </div>
@@ -329,7 +336,10 @@ export default function TrainingSession({
             {session.roleOptions.map((option, index) => (
               <button
                 key={option}
-                onClick={() => setRoleChoice(index)}
+                onClick={() => {
+                  setRoleChoice(index);
+                  playUISound(index === session.best ? 'success' : 'tap');
+                }}
                 className={`${styles.roleOption} ${roleChoice === index ? styles.roleSelected : ''}`}
               >
                 <span>{roleChoice === index ? '✓' : String.fromCharCode(65 + index)}</span>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import styles from './PhraseTrainer.module.css';
+import { playUISound } from '@/lib/uiSound';
 
 const libraries = {
   START_MODE: [
@@ -58,6 +59,27 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+function reviewStatus(item) {
+  if (!item || (item.progress_percent || 0) < 100) {
+    return { label: 'Learning', due: false };
+  }
+
+  if (!item.next_review_at) {
+    return { label: 'Review schedule pending', due: false };
+  }
+
+  const dueDate = new Date(item.next_review_at);
+
+  if (dueDate <= new Date()) {
+    return { label: 'Review due now', due: true };
+  }
+
+  return {
+    label: `Next review: ${dueDate.toLocaleDateString()}`,
+    due: false,
+  };
+}
+
 export default function PhraseTrainer({ mode, initialProgress }) {
   const phrases = libraries[mode] || libraries.START_MODE;
 
@@ -70,11 +92,27 @@ export default function PhraseTrainer({ mode, initialProgress }) {
   const [saving, setSaving] = useState('');
   const [message, setMessage] = useState('');
 
+  const orderedPhrases = useMemo(() => {
+    const now = new Date();
+
+    return [...phrases].sort(([keyA], [keyB]) => {
+      const a = progress[keyA];
+      const b = progress[keyB];
+
+      const aDue = a?.progress_percent >= 100 && a?.next_review_at && new Date(a.next_review_at) <= now;
+      const bDue = b?.progress_percent >= 100 && b?.next_review_at && new Date(b.next_review_at) <= now;
+
+      return Number(bDue) - Number(aDue);
+    });
+  }, [phrases, progress]);
+
   async function practice(key) {
     const previous = progress[key] || {
       phrase_key: key,
       repetitions: 0,
       progress_percent: 0,
+      review_stage: 0,
+      next_review_at: null,
     };
 
     const optimistic = {
@@ -105,6 +143,12 @@ export default function PhraseTrainer({ mode, initialProgress }) {
         ...current,
         [key]: payload.progress,
       }));
+
+      const reachedMastery =
+        (previous.progress_percent || 0) < 100 &&
+        (payload.progress?.progress_percent || 0) >= 100;
+
+      playUISound(reachedMastery || reviewStatus(previous).due ? 'complete' : 'success');
     } catch (error) {
       setProgress((current) => ({
         ...current,
@@ -119,9 +163,9 @@ export default function PhraseTrainer({ mode, initialProgress }) {
   return (
     <div className="page-stack">
       <header className="page-header">
-        <span className="eyebrow">POWER PHRASES</span>
+        <span className="eyebrow">✨ POWER PHRASES</span>
         <h1>Make useful English automatic.</h1>
-        <p>Listen, repeat and mark each phrase every time you practice it out loud.</p>
+        <p>Listen, repeat and revisit phrases when Speak Mode brings them back for review.</p>
       </header>
 
       {message ? (
@@ -132,13 +176,14 @@ export default function PhraseTrainer({ mode, initialProgress }) {
       ) : null}
 
       <div className={styles.list}>
-        {phrases.map(([key, phrase, meaning]) => {
+        {orderedPhrases.map(([key, phrase, meaning]) => {
           const item = progress[key];
           const percent = item?.progress_percent || 0;
           const reps = item?.repetitions || 0;
+          const review = reviewStatus(item);
 
           return (
-            <article className={styles.card} key={key}>
+            <article className={`${styles.card} ${review.due ? styles.dueCard : ''}`} key={key}>
               <button
                 className={styles.play}
                 type="button"
@@ -149,8 +194,9 @@ export default function PhraseTrainer({ mode, initialProgress }) {
               </button>
 
               <div className={styles.copy}>
-                <strong>{phrase}</strong>
+                <strong>{percent >= 100 ? '🌟 ' : ''}{phrase}</strong>
                 <small>{meaning}</small>
+                <em className={review.due ? styles.due : ''}>{review.label}</em>
                 <div className={styles.track}>
                   <i style={{ width: `${percent}%` }} />
                 </div>
@@ -169,9 +215,11 @@ export default function PhraseTrainer({ mode, initialProgress }) {
               >
                 {saving === key
                   ? 'Saving…'
-                  : percent >= 100
-                    ? 'Practice again'
-                    : 'I repeated it'}
+                  : review.due
+                    ? 'Review now'
+                    : percent >= 100
+                      ? 'Practice again'
+                      : 'I repeated it'}
               </button>
             </article>
           );
@@ -179,11 +227,11 @@ export default function PhraseTrainer({ mode, initialProgress }) {
       </div>
 
       <section className="panel-card accent-panel">
-        <span className="tiny-label">HOW THE PERCENTAGE WORKS</span>
-        <h3>Each deliberate repetition adds 20%.</h3>
+        <span className="tiny-label">🧠 SPACED REVIEW</span>
+        <h3>Learn it five times, then Speak Mode brings it back.</h3>
         <p>
-          1 repetition = 20% · 2 = 40% · 3 = 60% · 4 = 80% · 5 = 100%.
-          After 100%, the phrase stays available for future review.
+          Initial practice builds from 20% to 100%. After mastery, reviews are scheduled
+          around 24 hours, 3 days, 7 days and 14 days to keep the phrase active.
         </p>
       </section>
     </div>
