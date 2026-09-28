@@ -25,6 +25,7 @@ export default function DailySpeak({
   const [response, setResponse] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
