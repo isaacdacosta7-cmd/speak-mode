@@ -79,3 +79,37 @@ test('rejects a single important misspelling in a phrase', () => {
   assert.equal(result.canContinue, false);
   assert.equal(result.status, 'fix');
 });
+
+
+test('rejects repeated English words that do not form a coherent idea', () => {
+  const result = correctOpenAnswer('I know, but you, you, you, you, but you, you.');
+  assert.equal(result.canContinue, false);
+  assert.equal(result.status, 'fix');
+  assert.ok(result.corrections.some((item) => /repeat|coherent|incomplete/i.test(item)));
+});
+
+test('rejects the same incoherent repetition inside a training answer', () => {
+  const result = correctTrainingAnswer(
+    'I know, but you, you, you, you, but you, you.',
+    'native-02',
+    'answer'
+  );
+  assert.equal(result.canContinue, false);
+  assert.equal(result.status, 'fix');
+});
+
+test('rejects an incomplete clause after a connector', () => {
+  const result = correctOpenAnswer('I think, but you.');
+  assert.equal(result.canContinue, false);
+  assert.ok(result.corrections.some((item) => /clause.*incomplete/i.test(item)));
+});
+
+test('accepts a complete contrast with repeated pronouns used naturally', () => {
+  const result = correctOpenAnswer('I think you know what you want, but you need more time.');
+  assert.equal(result.canContinue, true, JSON.stringify(result, null, 2));
+});
+
+test('accepts natural emphasis without treating it as incoherence', () => {
+  const result = correctOpenAnswer('I really, really like this idea because it helps the team.');
+  assert.equal(result.canContinue, true, JSON.stringify(result, null, 2));
+});
